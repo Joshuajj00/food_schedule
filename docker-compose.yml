@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports:
+      - "1414:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/diet.db
+      - LOG_LEVEL=INFO
+    restart: unless-stopped

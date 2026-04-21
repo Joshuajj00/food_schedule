@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>혈당 관리 식단 어시스턴트</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tab-active { border-bottom: 3px solid #10b981; color: #10b981; font-weight: 600; }
+        .loading-spinner { border: 3px solid #f3f4f6; border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .card { transition: all 0.3s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .unit-btn.selected    { background-color: #d1fae5; border-color: #10b981; color: #065f46; }
+        .provider-btn.selected { background-color: #d1fae5; border-color: #10b981; color: #065f46; }
+        .thinking-btn.selected { background-color: #d1fae5; border-color: #10b981; color: #065f46; }
+        .effort-btn.selected   { background-color: #d1fae5; border-color: #10b981; color: #065f46; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app" class="max-w-lg mx-auto px-4 py-6">
+
+        <!-- 헤더 -->
+        <header class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">
+                <span class="text-emerald-600">🥗</span> 혈당 관리 식단 어시스턴트
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">보유 식재료로 건강한 식단을 추천받으세요</p>
+        </header>
+
+        <!-- 탭 네비게이션 -->
+        <nav class="flex border-b border-gray-200 mb-6">
+            <button onclick="switchTab('ingredients')" id="tab-ingredients" class="flex-1 py-3 text-center text-gray-600 hover:text-emerald-600 tab-active text-sm">
+                📦 식재료
+            </button>
+            <button onclick="switchTab('meal')" id="tab-meal" class="flex-1 py-3 text-center text-gray-600 hover:text-emerald-600 text-sm">
+                🍽️ 식단
+            </button>
+            <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 text-center text-gray-600 hover:text-emerald-600 text-sm">
+                📅 기록
+            </button>
+            <button onclick="switchTab('settings')" id="tab-settings" class="flex-1 py-3 text-center text-gray-600 hover:text-emerald-600 text-sm">
+                ⚙️ 설정
+            </button>
+            <button onclick="switchTab('budget')" id="tab-budget" class="flex-1 py-3 text-center text-gray-600 hover:text-emerald-600 text-sm">
+                💰 예산
+            </button>
+        </nav>
+
+        <!-- ══════════════ 식재료 탭 ══════════════ -->
+        <div id="content-ingredients" class="tab-content">
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3">식재료 추가</h2>
+                <div class="space-y-3">
+                    <input type="text" id="ing-name" placeholder="식재료명 (예: 두부)"
+                           class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                    <div>
+                        <label class="block text-sm text-gray-600 mb-2">단위 선택</label>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="selectUnit('g')" id="btn-g"
+                                    class="flex-1 py-2 px-3 border-2 border-gray-200 rounded-lg text-sm transition-all unit-btn selected">📏 g</button>
+                            <button type="button" onclick="selectUnit('개')" id="btn-count"
+                                    class="flex-1 py-2 px-3 border-2 border-gray-200 rounded-lg text-sm transition-all unit-btn">🔢 개</button>
+                            <button type="button" onclick="selectUnit('ml')" id="btn-ml"
+                                    class="flex-1 py-2 px-3 border-2 border-gray-200 rounded-lg text-sm transition-all unit-btn">🥛 ml</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600 mb-2">수량</label>
+                        <div class="flex items-center gap-3">
+                            <input type="range" id="ing-quantity-range" min="100" max="5000" value="500" step="10"
+                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                   oninput="updateQuantityFromRange()">
+                            <input type="number" id="ing-quantity" value="500"
+                                   class="w-20 px-3 py-2 border border-gray-200 rounded-lg text-center text-sm focus:ring-2 focus:ring-emerald-500"
+                                   oninput="updateRangeFromQuantity()">
+                            <span id="unit-display" class="text-gray-600 text-sm min-w-[30px]">g</span>
+                        </div>
+                    </div>
+                    <input type="date" id="ing-expiry"
+                           class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500">
+                    <button onclick="addIngredient()"
+                            class="w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 transition-all">
+                        + 식재료 추가
+                    </button>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3">보유 식재료 목록</h2>
+                <div id="ingredients-list" class="space-y-2">
+                    <p class="text-gray-400 text-center py-4">등록된 식재료가 없습니다</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════ 식단 탭 ══════════════ -->
+        <div id="content-meal" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3">오늘의 식단 생성</h2>
+                <p class="text-sm text-gray-500 mb-4">위 소매 절제술 후 소량 식사 기준, 저GI 탄수화물 최소화 3끼 추천</p>
+                <button onclick="generateMeal()" id="generate-btn"
+                        class="w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 transition-all">
+                    🍳 식단 생성하기
+                </button>
+            </div>
+            <div id="loading" class="hidden flex justify-center py-8">
+                <div class="loading-spinner"></div>
+            </div>
+            <div id="meal-result" class="space-y-4 hidden">
+                <div class="card bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center mb-2"><span class="text-2xl mr-2">🌅</span><h3 class="text-lg font-semibold text-gray-800">아침</h3></div>
+                    <h4 id="breakfast-name" class="text-emerald-600 font-medium mb-2"></h4>
+                    <p id="breakfast-ingredients" class="text-sm text-gray-600 mb-2"></p>
+                    <p id="breakfast-howto" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="card bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center mb-2"><span class="text-2xl mr-2">☀️</span><h3 class="text-lg font-semibold text-gray-800">점심</h3></div>
+                    <h4 id="lunch-name" class="text-emerald-600 font-medium mb-2"></h4>
+                    <p id="lunch-ingredients" class="text-sm text-gray-600 mb-2"></p>
+                    <p id="lunch-howto" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="card bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center mb-2"><span class="text-2xl mr-2">🌙</span><h3 class="text-lg font-semibold text-gray-800">저녁</h3></div>
+                    <h4 id="dinner-name" class="text-emerald-600 font-medium mb-2"></h4>
+                    <p id="dinner-ingredients" class="text-sm text-gray-600 mb-2"></p>
+                    <p id="dinner-howto" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
+                    <h3 class="text-sm font-semibold text-emerald-800 mb-1">💡 조언</h3>
+                    <p id="meal-note" class="text-sm text-emerald-700"></p>
+                </div>
+                <button onclick="saveMealToHistory()"
+                        class="w-full bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition-all">
+                    📝 오늘 식단으로 저장
+                </button>
+            </div>
+        </div>
+
+        <!-- ══════════════ 기록 탭 ══════════════ -->
+        <div id="content-history" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-sm p-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3">식단 기록</h2>
+                <div id="history-list" class="space-y-3">
+                    <p class="text-gray-400 text-center py-4">기록된 식단이 없습니다</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════ 설정 탭 ══════════════ -->
+        <div id="content-settings" class="tab-content hidden">
+
+            <!-- 제공자 선택 -->
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3">🤖 LLM 제공자</h2>
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="selectProvider('ollama')" id="provider-ollama"
+                            class="provider-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-sm font-medium transition-all">
+                        🦙 Ollama
+                    </button>
+                    <button onclick="selectProvider('openai')" id="provider-openai"
+                            class="provider-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-sm font-medium transition-all">
+                        🟢 OpenAI
+                    </button>
+                    <button onclick="selectProvider('anthropic')" id="provider-anthropic"
+                            class="provider-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-sm font-medium transition-all">
+                        🟣 Claude
+                    </button>
+                    <button onclick="selectProvider('mistral')" id="provider-mistral"
+                            class="provider-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-sm font-medium transition-all">
+                        🔶 Mistral
+                    </button>
+                    <button onclick="selectProvider('openrouter')" id="provider-openrouter"
+                            class="provider-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-sm font-medium transition-all">
+                        🔀 OpenRouter
+                    </button>
+                    <button onclick="selectProvider('custom')" id="provider-custom"
+                            class="provider-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-sm font-medium transition-all">
+                        ⚙️ Custom
+                    </button>
+                </div>
+                <p id="provider-hint" class="text-xs text-gray-400 mt-2 text-center"></p>
+            </div>
+
+            <!-- 연결 설정 -->
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3">🔌 연결 설정</h2>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm text-gray-600 mb-1">Base URL</label>
+                        <input type="text" id="setting-base-url" placeholder="http://localhost:11434"
+                               class="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                    </div>
+                    <div id="api-key-section">
+                        <label class="block text-sm text-gray-600 mb-1">API 키</label>
+                        <div class="relative">
+                            <input type="password" id="setting-api-key" placeholder="sk-..."
+                                   class="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 pr-14">
+                            <button onclick="toggleApiKeyVisibility()"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 px-2 py-1 hover:text-gray-800 rounded">
+                                보기
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600 mb-1">모델명</label>
+                        <input type="text" id="setting-model" list="model-suggestions"
+                               placeholder="모델명을 입력하거나 선택하세요"
+                               class="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
+                        <datalist id="model-suggestions"></datalist>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600 mb-1">API 형식</label>
+                        <select id="setting-format"
+                                class="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 bg-white">
+                            <option value="ollama">Ollama API  (/api/chat) — 로컬 및 ollama.com 클라우드</option>
+                            <option value="openai">OpenAI Chat Completions  (/v1/chat/completions)</option>
+                            <option value="anthropic">Anthropic Messages API  (/v1/messages)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 생성 설정 -->
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">⚡ 생성 설정</h2>
+                <div class="space-y-5">
+
+                    <!-- 스트리밍 -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium text-gray-800 text-sm">스트리밍 모드</p>
+                            <p class="text-xs text-gray-400">응답을 실시간 수신 (서버 내부 처리)</p>
+                        </div>
+                        <button onclick="toggleStreaming()" id="streaming-toggle"
+                                class="px-5 py-2 rounded-lg font-semibold text-sm transition-all bg-gray-200 text-gray-600 min-w-[60px]">
+                            OFF
+                        </button>
+                    </div>
+
+                    <hr class="border-gray-100">
+
+                    <!-- 추론 모드 -->
+                    <div>
+                        <p class="font-medium text-gray-800 text-sm mb-1">추론 모드 (Thinking)</p>
+                        <p class="text-xs text-gray-400 mb-2">LLM이 답변 전 내부적으로 추론하는 방식</p>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="selectThinking('none')" id="thinking-none"
+                                    class="thinking-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-xs font-medium transition-all">
+                                없음
+                            </button>
+                            <button onclick="selectThinking('cot')" id="thinking-cot"
+                                    class="thinking-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-xs font-medium transition-all">
+                                Chain-of-Thought
+                            </button>
+                            <button onclick="selectThinking('think')" id="thinking-think"
+                                    class="thinking-btn py-2 px-2 border-2 border-gray-200 rounded-lg text-xs font-medium transition-all">
+                                Native Think ✦
+                            </button>
+                        </div>
+                        <p id="thinking-hint-cot" class="text-xs text-gray-400 mt-1 hidden">
+                            시스템 프롬프트에 단계적 추론 지시를 추가합니다 (모든 LLM 호환)
+                        </p>
+                        <p id="thinking-hint-think" class="text-xs text-amber-600 mt-1 hidden">
+                            ✦ Anthropic: Extended Thinking / Ollama: think:true / OpenAI: system prompt 추가
+                        </p>
+                    </div>
+
+                    <!-- 추론 예산 (think 모드일 때만 표시) -->
+                    <div id="thinking-budget-section" class="hidden">
+                        <label class="block text-sm text-gray-600 mb-1">추론 예산 (토큰) — Anthropic 전용</label>
+                        <input type="number" id="setting-thinking-budget" value="8000"
+                               min="1000" max="100000" step="1000"
+                               class="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
+                        <p class="text-xs text-gray-400 mt-1">권장: 8,000 ~ 32,000 토큰</p>
+                    </div>
+
+                    <hr class="border-gray-100">
+
+                    <!-- Reasoning Effort (OpenAI o-series) -->
+                    <div>
+                        <p class="font-medium text-gray-800 text-sm mb-1">추론 강도 (Reasoning Effort)</p>
+                        <p class="text-xs text-gray-400 mb-2">OpenAI o-series 모델 전용 (o1, o3, o4 등)</p>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button onclick="selectEffort('none')" id="effort-none"
+                                    class="effort-btn py-2 px-1 border-2 border-gray-200 rounded-lg text-xs font-medium transition-all">
+                                기본
+                            </button>
+                            <button onclick="selectEffort('low')" id="effort-low"
+                                    class="effort-btn py-2 px-1 border-2 border-gray-200 rounded-lg text-xs font-medium transition-all">
+                                낮음
+                            </button>
+                            <button onclick="selectEffort('medium')" id="effort-medium"
+                                    class="effort-btn py-2 px-1 border-2 border-gray-200 rounded-lg text-xs font-medium transition-all">
+                                중간
+                            </button>
+                            <button onclick="selectEffort('high')" id="effort-high"
+                                    class="effort-btn py-2 px-1 border-2 border-gray-200 rounded-lg text-xs font-medium transition-all">
+                                높음
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 저장 / 테스트 -->
+            <div class="flex gap-3 mb-4">
+                <button onclick="testConnection()" id="test-btn"
+                        class="flex-1 border-2 border-emerald-600 text-emerald-600 py-3 rounded-lg font-semibold text-sm hover:bg-emerald-50 transition-all">
+                    🔌 연결 테스트
+                </button>
+                <button onclick="saveSettings()"
+                        class="flex-1 bg-emerald-600 text-white py-3 rounded-lg font-semibold text-sm hover:bg-emerald-700 transition-all">
+                    💾 저장
+                </button>
+            </div>
+        </div>
+
+        <!-- ══════════════ 예산 탭 ══════════════ -->
+        <div id="content-budget" class="tab-content hidden">
+            <!-- 예산 입력 -->
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 mb-1">🛒 식재료 구매 추천</h2>
+                <p class="text-xs text-gray-400 mb-3">예산을 입력하면 혈당 관리에 적합한 구매 목록을 추천합니다</p>
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₩</span>
+                        <input type="number" id="budget-amount" placeholder="30000" min="1000" step="1000"
+                               class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm">
+                    </div>
+                    <button onclick="recommendPurchases()" id="recommend-btn"
+                            class="bg-emerald-600 text-white px-5 py-3 rounded-lg font-semibold text-sm hover:bg-emerald-700 transition-all whitespace-nowrap">
+                        추천 받기
+                    </button>
+                </div>
+            </div>
+
+            <!-- 로딩 -->
+            <div id="budget-loading" class="hidden flex justify-center py-8">
+                <div class="loading-spinner"></div>
+            </div>
+
+            <!-- 추천 결과 -->
+            <div id="budget-result" class="hidden space-y-3">
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-emerald-600 font-medium">총 예상 금액</p>
+                        <p id="budget-total-estimated" class="text-2xl font-bold text-emerald-700">₩0</p>
+                    </div>
+                    <span class="text-3xl">🧾</span>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <h3 class="text-base font-semibold text-gray-800 mb-3">추천 식재료</h3>
+                    <div id="budget-items-list" class="space-y-3"></div>
+                </div>
+
+                <div id="budget-note-section" class="bg-emerald-50 rounded-xl p-4 border border-emerald-200 hidden">
+                    <h3 class="text-sm font-semibold text-emerald-800 mb-1">💡 구매 조언</h3>
+                    <p id="budget-note" class="text-sm text-emerald-700"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 토스트 -->
+        <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg hidden transition-all">
+            <span id="toast-message"></span>
+        </div>
+    </div>
+
+    <script>
+    const API_BASE = '';
+    let currentMealPlan = null;
+    let selectedUnit = 'g';
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // ── 식재료 단위 슬라이더 ──────────────────────────────────────────────
+    const unitRanges = {
+        'g':  { min: 100, max: 5000, step: 10,  default: 500 },
+        '개': { min: 1,   max: 100,  step: 1,   default: 1   },
+        'ml': { min: 100, max: 5000, step: 10,  default: 500 },
+    };
+
+    function selectUnit(unit) {
+        selectedUnit = unit;
+        const range = unitRanges[unit];
+        document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('selected'));
+        const idMap = { 'g': 'btn-g', '개': 'btn-count', 'ml': 'btn-ml' };
+        document.getElementById(idMap[unit]).classList.add('selected');
+        document.getElementById('unit-display').textContent = unit;
+        const r = document.getElementById('ing-quantity-range');
+        const n = document.getElementById('ing-quantity');
+        r.min = range.min; r.max = range.max; r.step = range.step; r.value = range.default;
+        n.value = range.default;
+    }
+    function updateQuantityFromRange() {
+        document.getElementById('ing-quantity').value = document.getElementById('ing-quantity-range').value;
+    }
+    function updateRangeFromQuantity() {
+        const n = document.getElementById('ing-quantity');
+        const r = document.getElementById('ing-quantity-range');
+        const range = unitRanges[selectedUnit];
+        let v = parseInt(n.value) || range.min;
+        v = Math.max(range.min, Math.min(range.max, v));
+        r.value = v; n.value = v;
+    }
+
+    // ── 탭 전환 ───────────────────────────────────────────────────────────
+    function switchTab(name) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('nav button').forEach(el => el.classList.remove('tab-active'));
+        document.getElementById(`content-${name}`).classList.remove('hidden');
+        document.getElementById(`tab-${name}`).classList.add('tab-active');
+        if (name === 'ingredients') loadIngredients();
+        if (name === 'history')     loadHistory();
+        if (name === 'settings')    loadSettings();
+    }
+
+    // ── 토스트 ────────────────────────────────────────────────────────────
+    function showToast(message, isError = false) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-message').textContent = message;
+        toast.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg transition-all text-white ${isError ? 'bg-red-600' : 'bg-gray-800'}`;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    // ── 식재료 ────────────────────────────────────────────────────────────
+    async function loadIngredients() {
+        try {
+            const res = await fetch(`${API_BASE}/api/ingredients`);
+            renderIngredients(await res.json());
+        } catch { showToast('식재료 목록을 불러오지 못했습니다', true); }
+    }
+    function renderIngredients(list) {
+        const el = document.getElementById('ingredients-list');
+        if (!list.length) { el.innerHTML = '<p class="text-gray-400 text-center py-4">등록된 식재료가 없습니다</p>'; return; }
+        el.innerHTML = list.map(ing => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                    <span class="font-medium text-gray-800">${escapeHtml(ing.name)}</span>
+                    <span class="text-sm text-gray-500 ml-2">${escapeHtml(ing.quantity)}${escapeHtml(ing.unit)}</span>
+                    ${ing.expiry_date ? `<span class="text-xs text-gray-400 ml-2">(~${escapeHtml(ing.expiry_date)})</span>` : ''}
+                </div>
+                <button onclick="deleteIngredient(${ing.id})" class="text-red-500 hover:text-red-700 p-2">✕</button>
+            </div>`).join('');
+    }
+    async function addIngredient() {
+        const name = document.getElementById('ing-name').value.trim();
+        const quantity = parseFloat(document.getElementById('ing-quantity').value);
+        const expiry_date = document.getElementById('ing-expiry').value || null;
+        if (!name || isNaN(quantity)) { showToast('모든 필드를 입력해주세요', true); return; }
+        try {
+            const res = await fetch(`${API_BASE}/api/ingredients`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, quantity, unit: selectedUnit, expiry_date }),
+            });
+            if (res.ok) {
+                showToast('식재료가 추가되었습니다');
+                document.getElementById('ing-name').value = '';
+                selectUnit('g');
+                document.getElementById('ing-expiry').value = new Date().toISOString().split('T')[0];
+                loadIngredients();
+            } else { showToast((await res.json()).detail || '추가 실패', true); }
+        } catch { showToast('식재료 추가 중 오류 발생', true); }
+    }
+    async function deleteIngredient(id) {
+        if (!confirm('이 식재료를 삭제하시겠습니까?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/ingredients/${id}`, { method: 'DELETE' });
+            if (res.ok) { showToast('식재료가 삭제되었습니다'); loadIngredients(); }
+            else showToast('삭제 실패', true);
+        } catch { showToast('삭제 중 오류 발생', true); }
+    }
+
+    // ── 식단 생성 ─────────────────────────────────────────────────────────
+    async function generateMeal() {
+        const btn = document.getElementById('generate-btn');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('meal-result');
+        btn.disabled = true; btn.textContent = '생성 중...';
+        loading.classList.remove('hidden'); result.classList.add('hidden');
+        try {
+            const res = await fetch(`${API_BASE}/api/meal/generate`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || '식단 생성 실패');
+            currentMealPlan = data;
+            document.getElementById('breakfast-name').textContent = data.breakfast?.name || '';
+            document.getElementById('breakfast-ingredients').textContent = '재료: ' + (data.breakfast?.ingredients?.join(', ') || '');
+            document.getElementById('breakfast-howto').textContent = data.breakfast?.how_to || '';
+            document.getElementById('lunch-name').textContent = data.lunch?.name || '';
+            document.getElementById('lunch-ingredients').textContent = '재료: ' + (data.lunch?.ingredients?.join(', ') || '');
+            document.getElementById('lunch-howto').textContent = data.lunch?.how_to || '';
+            document.getElementById('dinner-name').textContent = data.dinner?.name || '';
+            document.getElementById('dinner-ingredients').textContent = '재료: ' + (data.dinner?.ingredients?.join(', ') || '');
+            document.getElementById('dinner-howto').textContent = data.dinner?.how_to || '';
+            document.getElementById('meal-note').textContent = data.note || '';
+            result.classList.remove('hidden');
+            showToast('식단이 생성되었습니다');
+        } catch (e) { showToast(e.message || '식단 생성 중 오류 발생', true); }
+        finally {
+            btn.disabled = false; btn.textContent = '🍳 식단 생성하기';
+            loading.classList.add('hidden');
+        }
+    }
+    async function saveMealToHistory() {
+        if (!currentMealPlan) { showToast('저장할 식단이 없습니다', true); return; }
+        const today = new Date().toISOString().split('T')[0];
+        try {
+            const res = await fetch(`${API_BASE}/api/meal/history`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: today,
+                    breakfast: currentMealPlan.breakfast?.name,
+                    lunch: currentMealPlan.lunch?.name,
+                    dinner: currentMealPlan.dinner?.name,
+                    note: currentMealPlan.note,
+                }),
+            });
+            showToast(res.ok ? '식단이 기록되었습니다' : '기록 저장 실패', !res.ok);
+        } catch { showToast('저장 중 오류 발생', true); }
+    }
+
+    // ── 기록 ──────────────────────────────────────────────────────────────
+    async function loadHistory() {
+        try {
+            const res = await fetch(`${API_BASE}/api/meal/history`);
+            renderHistory(await res.json());
+        } catch { showToast('기록을 불러오지 못했습니다', true); }
+    }
+    function renderHistory(history) {
+        const el = document.getElementById('history-list');
+        if (!history.length) { el.innerHTML = '<p class="text-gray-400 text-center py-4">기록된 식단이 없습니다</p>'; return; }
+        el.innerHTML = history.map(h => `
+            <div class="bg-gray-50 rounded-lg p-3">
+                <div class="font-medium text-gray-800 mb-2">${escapeHtml(h.date)}</div>
+                <div class="text-sm text-gray-600 space-y-1">
+                    <div>🌅 아침: ${escapeHtml(h.breakfast || '-')}</div>
+                    <div>☀️ 점심: ${escapeHtml(h.lunch || '-')}</div>
+                    <div>🌙 저녁: ${escapeHtml(h.dinner || '-')}</div>
+                    ${h.note ? `<div class="text-emerald-600 mt-2">💡 ${escapeHtml(h.note)}</div>` : ''}
+                </div>
+            </div>`).join('');
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  설정 탭
+    // ══════════════════════════════════════════════════════════════════════
+    const PROVIDERS = {
+        ollama:      { base_url: 'https://ollama.com',         format: 'openai',     needs_key: true,
+                       models: [],
+                       hint: 'Ollama Cloud API — ollama.com/settings/keys 에서 API 키 발급' },
+        openai:      { base_url: 'https://api.openai.com',    format: 'openai',     needs_key: true,
+                       models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o3-mini', 'o4-mini'],
+                       hint: 'OpenAI 공식 API' },
+        anthropic:   { base_url: 'https://api.anthropic.com', format: 'anthropic',  needs_key: true,
+                       models: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+                       hint: 'Anthropic Claude API (Extended Thinking 지원)' },
+        mistral:     { base_url: 'https://api.mistral.ai',    format: 'openai',     needs_key: true,
+                       models: ['mistral-large-latest', 'mistral-small-latest', 'open-mistral-nemo'],
+                       hint: 'Mistral AI API (OpenAI 호환 형식)' },
+        openrouter:  { base_url: 'https://openrouter.ai/api', format: 'openai',     needs_key: true,
+                       models: [],
+                       hint: 'OpenRouter — 모델명: 제공자/모델 (예: anthropic/claude-3.5-sonnet)' },
+        custom:      { base_url: '',                          format: 'openai',     needs_key: true,
+                       models: [],
+                       hint: 'Base URL과 API 형식을 직접 입력하세요' },
+    };
+
+    let _selectedProvider = 'ollama';
+    let _streaming = false;
+    let _thinking = 'none';
+    let _effort = 'none';
+
+    async function loadSettings() {
+        try {
+            const res = await fetch('/api/settings');
+            if (!res.ok) return;
+            applyToUI(await res.json());
+        } catch { /* silent */ }
+    }
+
+    function applyToUI(s) {
+        _selectedProvider = s.provider;
+        _streaming = s.streaming;
+        _thinking  = s.thinking_mode;
+        _effort    = s.reasoning_effort;
+
+        document.getElementById('setting-base-url').value          = s.base_url;
+        document.getElementById('setting-api-key').value           = s.api_key;
+        document.getElementById('setting-model').value             = s.model_name;
+        document.getElementById('setting-format').value            = s.api_format;
+        document.getElementById('setting-thinking-budget').value   = s.thinking_budget;
+
+        _refreshProviderBtns(s.provider);
+        _refreshStreaming();
+        _refreshThinking(s.thinking_mode);
+        _refreshEffort(s.reasoning_effort);
+        _refreshModelList(s.provider);
+        _refreshApiKeySection(s.provider);
+        _setProviderHint(s.provider);
+    }
+
+    function selectProvider(p) {
+        _selectedProvider = p;
+        const preset = PROVIDERS[p];
+        document.getElementById('setting-base-url').value = preset.base_url;
+        document.getElementById('setting-format').value   = preset.format;
+        _refreshProviderBtns(p);
+        _refreshModelList(p);
+        _refreshApiKeySection(p);
+        _setProviderHint(p);
+    }
+
+    function _refreshProviderBtns(p) {
+        document.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById(`provider-${p}`)?.classList.add('selected');
+    }
+    function _refreshModelList(p) {
+        const datalist = document.getElementById('model-suggestions');
+        datalist.innerHTML = (PROVIDERS[p]?.models || []).map(m => `<option value="${m}">`).join('');
+    }
+    function _refreshApiKeySection(p) {
+        document.getElementById('api-key-section').style.display = PROVIDERS[p]?.needs_key ? '' : 'none';
+    }
+    function _setProviderHint(p) {
+        document.getElementById('provider-hint').textContent = PROVIDERS[p]?.hint || '';
+    }
+
+    function toggleApiKeyVisibility() {
+        const inp = document.getElementById('setting-api-key');
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+    }
+
+    function toggleStreaming() {
+        _streaming = !_streaming;
+        _refreshStreaming();
+    }
+    function _refreshStreaming() {
+        const btn = document.getElementById('streaming-toggle');
+        btn.textContent  = _streaming ? 'ON' : 'OFF';
+        btn.className = `px-5 py-2 rounded-lg font-semibold text-sm transition-all min-w-[60px] ${_streaming ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600'}`;
+    }
+
+    function selectThinking(mode) {
+        _thinking = mode;
+        _refreshThinking(mode);
+    }
+    function _refreshThinking(mode) {
+        document.querySelectorAll('.thinking-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById(`thinking-${mode}`)?.classList.add('selected');
+        document.getElementById('thinking-hint-cot').classList.toggle('hidden', mode !== 'cot');
+        document.getElementById('thinking-hint-think').classList.toggle('hidden', mode !== 'think');
+        document.getElementById('thinking-budget-section').classList.toggle('hidden', mode !== 'think');
+    }
+
+    function selectEffort(e) {
+        _effort = e;
+        _refreshEffort(e);
+    }
+    function _refreshEffort(e) {
+        document.querySelectorAll('.effort-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById(`effort-${e}`)?.classList.add('selected');
+    }
+
+    async function saveSettings(silent = false) {
+        const payload = {
+            provider:         _selectedProvider,
+            base_url:         document.getElementById('setting-base-url').value.trim(),
+            api_key:          document.getElementById('setting-api-key').value.trim(),
+            model_name:       document.getElementById('setting-model').value.trim(),
+            api_format:       document.getElementById('setting-format').value,
+            streaming:        _streaming,
+            thinking_mode:    _thinking,
+            thinking_budget:  parseInt(document.getElementById('setting-thinking-budget').value) || 8000,
+            reasoning_effort: _effort,
+        };
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+                if (!silent) showToast('설정이 저장되었습니다');
+                return true;
+            }
+            showToast('저장 실패', true);
+            return false;
+        } catch {
+            showToast('저장 중 오류 발생', true);
+            return false;
+        }
+    }
+
+    async function testConnection() {
+        const btn = document.getElementById('test-btn');
+        btn.disabled = true; btn.textContent = '저장 중...';
+        // 현재 폼 값을 먼저 저장한 뒤 테스트
+        const saved = await saveSettings(true);
+        if (!saved) { btn.disabled = false; btn.textContent = '🔌 연결 테스트'; return; }
+        btn.textContent = '테스트 중...';
+        try {
+            const res = await fetch('/api/settings/test', { method: 'POST' });
+            const data = await res.json();
+            showToast(res.ok ? `✓ ${data.message}` : `✗ ${data.detail}`, !res.ok);
+        } catch { showToast('연결 테스트 실패', true); }
+        finally { btn.disabled = false; btn.textContent = '🔌 연결 테스트'; }
+    }
+
+    // ── 예산 / 구매 추천 ──────────────────────────────────────────────────
+    let _budgetItems = [];
+
+    async function recommendPurchases() {
+        const budget = parseInt(document.getElementById('budget-amount').value);
+        if (!budget || budget < 1000) { showToast('예산을 1,000원 이상 입력해주세요', true); return; }
+
+        const btn = document.getElementById('recommend-btn');
+        const loading = document.getElementById('budget-loading');
+        const result = document.getElementById('budget-result');
+        btn.disabled = true; btn.textContent = '추천 중...';
+        loading.classList.remove('hidden'); result.classList.add('hidden');
+        try {
+            const res = await fetch(`${API_BASE}/api/budget/recommend`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ budget }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || '추천 실패');
+
+            _budgetItems = data.items;
+            document.getElementById('budget-total-estimated').textContent = `₩${data.total_estimated.toLocaleString()}`;
+            renderBudgetItems(data.items);
+
+            const noteSection = document.getElementById('budget-note-section');
+            if (data.note) {
+                document.getElementById('budget-note').textContent = data.note;
+                noteSection.classList.remove('hidden');
+            } else {
+                noteSection.classList.add('hidden');
+            }
+            result.classList.remove('hidden');
+            showToast(`추천 완료: ${data.items.length}종`);
+        } catch (e) { showToast(e.message || '추천 요청 실패', true); }
+        finally {
+            btn.disabled = false; btn.textContent = '추천 받기';
+            loading.classList.add('hidden');
+        }
+    }
+
+    function renderBudgetItems(items) {
+        const el = document.getElementById('budget-items-list');
+        if (!items.length) {
+            el.innerHTML = '<p class="text-gray-400 text-center py-4">추천 식재료가 없습니다</p>';
+            return;
+        }
+        el.innerHTML = items.map((item, idx) => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-2">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-medium text-gray-800">${escapeHtml(item.name)}</span>
+                        <span class="text-sm text-gray-500">${escapeHtml(String(item.quantity))}${escapeHtml(item.unit)}</span>
+                        <span class="text-sm font-semibold text-emerald-600">₩${Number(item.estimated_price).toLocaleString()}</span>
+                    </div>
+                    ${item.reason ? `<p class="text-xs text-gray-400 mt-0.5">${escapeHtml(item.reason)}</p>` : ''}
+                </div>
+                <button onclick="addRecommendedIngredient(${idx})" id="add-btn-${idx}"
+                        class="flex-shrink-0 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold hover:bg-emerald-200 transition-all">
+                    + 추가
+                </button>
+            </div>`).join('');
+    }
+
+    async function addRecommendedIngredient(idx) {
+        const item = _budgetItems[idx];
+        if (!item) return;
+        const btn = document.getElementById(`add-btn-${idx}`);
+        btn.disabled = true; btn.textContent = '추가 중...';
+        try {
+            const res = await fetch(`${API_BASE}/api/ingredients`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: item.name, quantity: item.quantity, unit: item.unit }),
+            });
+            if (res.ok) {
+                btn.textContent = '✓ 추가됨';
+                btn.className = 'flex-shrink-0 px-3 py-1.5 bg-gray-200 text-gray-400 rounded-lg text-xs font-semibold cursor-default';
+                showToast(`${item.name} 식재료에 추가됨`);
+            } else {
+                btn.disabled = false; btn.textContent = '+ 추가';
+                showToast('추가 실패', true);
+            }
+        } catch {
+            btn.disabled = false; btn.textContent = '+ 추가';
+            showToast('추가 중 오류', true);
+        }
+    }
+
+    // ── 초기화 ────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('ing-expiry').value = new Date().toISOString().split('T')[0];
+        selectUnit('g');
+        loadIngredients();
+    });
+    </script>
+</body>
+</html>
