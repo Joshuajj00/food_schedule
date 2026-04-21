@@ -105,10 +105,9 @@ class AIClient:
         url = f"{settings.base_url.rstrip('/')}/v1/chat/completions"
         final_system = self._apply_cot(system_prompt, settings)
 
-        headers = {
-            "Authorization": f"Bearer {settings.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        if settings.api_key:
+            headers["Authorization"] = f"Bearer {settings.api_key}"
         if "openrouter.ai" in settings.base_url:
             headers["HTTP-Referer"] = "http://diet-assistant"
             headers["X-Title"] = "Diet Assistant"
