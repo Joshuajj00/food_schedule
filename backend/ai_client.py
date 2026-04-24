@@ -77,6 +77,8 @@ class AIClient:
             if settings.streaming:
                 return await self._collect_ollama_stream(client, url, payload, headers)
             resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code >= 400:
+                logger.error(f"[Ollama] HTTP {resp.status_code} 응답 본문: {resp.text}")
             resp.raise_for_status()
             raw = resp.json()
             logger.log(TRACE, f"[Ollama] 원시 응답: {json.dumps(raw, ensure_ascii=False)[:2000]}")
@@ -133,6 +135,8 @@ class AIClient:
             if settings.streaming:
                 return await self._collect_openai_stream(client, url, payload, headers)
             resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code >= 400:
+                logger.error(f"[OpenAI] HTTP {resp.status_code} 응답 본문: {resp.text}")
             resp.raise_for_status()
             raw = resp.json()
             logger.log(TRACE, f"[OpenAI] 원시 응답: {json.dumps(raw, ensure_ascii=False)[:2000]}")
@@ -194,6 +198,8 @@ class AIClient:
             if settings.streaming:
                 return await self._collect_anthropic_stream(client, url, payload, headers)
             resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code >= 400:
+                logger.error(f"[Anthropic] HTTP {resp.status_code} 응답 본문: {resp.text}")
             resp.raise_for_status()
             raw = resp.json()
             logger.log(TRACE, f"[Anthropic] 원시 응답: {json.dumps(raw, ensure_ascii=False)[:2000]}")
