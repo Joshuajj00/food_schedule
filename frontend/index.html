@@ -597,7 +597,11 @@
         document.getElementById('setting-base-url').value          = s.base_url;
         document.getElementById('setting-api-key').value           = s.api_key;
         document.getElementById('setting-model').value             = s.model_name;
-        document.getElementById('setting-format').value            = s.api_format;
+        // custom 제외 known provider는 preset format 사용 (DB 값이 잘못 저장된 경우 자동 교정)
+        const correctFormat = (s.provider !== 'custom' && PROVIDERS[s.provider])
+            ? PROVIDERS[s.provider].format
+            : s.api_format;
+        document.getElementById('setting-format').value            = correctFormat;
         document.getElementById('setting-thinking-budget').value   = s.thinking_budget;
 
         _refreshProviderBtns(s.provider);
