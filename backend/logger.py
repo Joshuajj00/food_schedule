@@ -1,6 +1,8 @@
 import logging
 import os
 
+# DEBUG(10)보다 낮은 커스텀 레벨 — 전체 API 페이로드·원시 응답 전용
+# DEBUG와 분리해 API 키 등 민감 데이터가 기본 로그에 노출되지 않도록 함
 TRACE = 5
 logging.addLevelName(TRACE, 'TRACE')
 

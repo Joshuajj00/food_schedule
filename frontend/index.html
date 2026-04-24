@@ -597,7 +597,8 @@
         document.getElementById('setting-base-url').value          = s.base_url;
         document.getElementById('setting-api-key').value           = s.api_key;
         document.getElementById('setting-model').value             = s.model_name;
-        // custom 제외 known provider는 preset format 사용 (DB 값이 잘못 저장된 경우 자동 교정)
+        // known provider는 DB의 api_format 대신 PROVIDERS preset format 사용
+        // provider 변경 후 저장 없이 재접속하면 DB format이 이전 provider 값으로 남아 API 호출 실패하는 문제 방지
         const correctFormat = (s.provider !== 'custom' && PROVIDERS[s.provider])
             ? PROVIDERS[s.provider].format
             : s.api_format;

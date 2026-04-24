@@ -86,6 +86,7 @@ class WeeklyBudgetResponse(BaseModel):
 # ========== LLM 설정 모델 ==========
 
 class LLMSettingsUpdate(BaseModel):
+    # Pydantic v2는 'model_' 접두사를 내부 네임스페이스로 예약 — model_name 필드 경고 억제
     model_config = ConfigDict(protected_namespaces=())
 
     provider: str = 'openai'

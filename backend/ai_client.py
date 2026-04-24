@@ -60,7 +60,7 @@ class AIClient:
                 {"role": "user", "content": user_prompt},
             ],
             "stream": settings.streaming,
-            "format": "json",
+            "format": "json",  # Ollama JSON 모드 강제 — 없으면 자연어로 응답할 수 있음
         }
         if settings.thinking_mode == "think":
             payload["think"] = True
@@ -157,6 +157,7 @@ class AIClient:
                     break
                 chunk = json.loads(data)
                 delta = chunk["choices"][0].get("delta", {})
+                # .get("content", "")가 아닌 or "" 사용: OpenAI가 tool_call·stop 이벤트 시 content를 null로 전송
                 text += delta.get("content") or ""
         logger.debug(f"[OpenAI] 스트리밍 완료, 수신 {len(text)}자")
         logger.log(TRACE, f"[OpenAI] 전체 수신 텍스트: {text[:2000]}")
@@ -184,6 +185,7 @@ class AIClient:
             headers["anthropic-beta"] = "interleaved-thinking-2025-05-14"
             budget = settings.thinking_budget or 8000
             payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
+            # thinking 토큰은 max_tokens 한도에 포함되므로 실제 텍스트 응답용 여유분을 반드시 추가
             max_tokens = budget + 4096
         elif settings.thinking_mode == "cot":
             payload["messages"][0]["content"] += "\n\n먼저 단계적으로 추론한 뒤 최종 JSON을 출력하라."
