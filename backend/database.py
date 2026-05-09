@@ -87,6 +87,23 @@ class MealFavorite(Base):
 # DB 초기화 함수
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _migrate(engine)
+
+
+def _migrate(engine):
+    """기존 DB에 누락된 컬럼 추가 (SQLite는 ALTER TABLE ADD COLUMN만 지원)"""
+    import sqlite3
+    migrations = [
+        # (테이블명, 컬럼명, 컬럼정의)
+        ('ingredients', 'category', 'VARCHAR DEFAULT \'기타\''),
+    ]
+    with engine.connect() as conn:
+        for table, column, col_def in migrations:
+            try:
+                conn.exec_driver_sql(f'ALTER TABLE {table} ADD COLUMN {column} {col_def}')
+            except Exception:
+                pass  # 컬럼이 이미 존재하면 무시
+        conn.commit()
 
 # DB 세션 의존성
 def get_db():
