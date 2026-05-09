@@ -95,10 +95,10 @@ async def generate_meal(db: Session = Depends(get_db)):
                 + option.lunch.nutrition.protein_g
                 + option.dinner.nutrition.protein_g
             )
-            if total_protein < 45:
+            if total_protein < 48:
                 raise HTTPException(
                     status_code=500,
-                    detail=f'AI가 하루 단백질 45g 기준을 충족하지 못했습니다 (합계 {total_protein:.1f}g).'
+                    detail=f'AI가 하루 단백질 48g 기준을 충족하지 못했습니다 (합계 {total_protein:.1f}g).'
                 )
 
         response = MealPlanListResponse(options=options, note=result.get('note', ''))
