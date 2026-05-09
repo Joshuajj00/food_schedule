@@ -27,19 +27,33 @@ def _get_or_create_key() -> bytes:
         return base64.urlsafe_b64encode(env_key.encode().ljust(32)[:32])
 
     key_path_env = os.getenv('ENCRYPTION_KEY_PATH', '').strip()
-    key_file = Path(key_path_env) if key_path_env else _DEFAULT_KEY_FILE
 
+    if key_path_env:
+        key_file = Path(key_path_env)
+        if key_file.exists():
+            return key_file.read_bytes()
+        # 명시적 경로가 지정됐는데 파일 없음 → 자동 생성 금지 (read-only 마운트 대응)
+        raise RuntimeError(
+            f"ENCRYPTION_KEY_PATH='{key_path_env}' 파일이 존재하지 않습니다.\n"
+            f"컨테이너 시작 전 호스트에서 키를 생성하세요:\n"
+            f"  mkdir -p secrets\n"
+            f"  python3 -c \"from cryptography.fernet import Fernet; "
+            f"open('secrets/encryption.key', 'wb').write(Fernet.generate_key())\"\n"
+            f"  chmod 600 secrets/encryption.key"
+        )
+
+    # 기본 경로: 자동 생성 허용
+    key_file = _DEFAULT_KEY_FILE
     if key_file.exists():
         return key_file.read_bytes()
 
-    # 신규 생성
     key = Fernet.generate_key()
     key_file.parent.mkdir(parents=True, exist_ok=True)
     key_file.write_bytes(key)
     try:
         os.chmod(key_file, 0o600)
     except (OSError, NotImplementedError):
-        pass  # Windows 등 권한 변경 미지원 환경 무시
+        pass
     return key
 
 
