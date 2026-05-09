@@ -117,6 +117,23 @@ async def generate_meal(db: Session = Depends(get_db)):
                     f"옵션 {idx + 1}: 하루 탄수화물이 {total_carbs:.1f}g으로 한도(15g) 초과입니다."
                 )
 
+        from backend.nutrition_client import calculate_meal_nutrition
+        for option in options:
+            try:
+                for meal in [option.breakfast, option.lunch, option.dinner]:
+                    ing_list = [(ing, 50.0) for ing in meal.ingredients if ing]
+                    verified = await calculate_meal_nutrition(ing_list)
+                    if verified['matched']:
+                        t = verified['total']
+                        meal.note = (
+                            f"[식약처DB 추정 (재료 50g 가정)] "
+                            f"열량 {t['calories']:.0f}kcal, "
+                            f"단백질 {t['protein_g']:.1f}g, "
+                            f"탄수 {t['carbs_g']:.1f}g, 지방 {t['fat_g']:.1f}g"
+                        )
+            except Exception as e:
+                logger.warning(f"영양 검증 실패 (무시하고 계속): {e}")
+
         response = MealPlanListResponse(
             options=options,
             note=result.get('note', ''),

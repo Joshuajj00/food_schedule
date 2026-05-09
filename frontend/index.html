@@ -410,6 +410,7 @@
                         <span class="bg-red-50 text-red-600 px-1 rounded">단 ${nut.protein_g||0}g</span>
                         <span class="bg-yellow-50 text-yellow-600 px-1 rounded">탄 ${nut.carbs_g||0}g</span>
                     </div>
+                    ${m.note?`<div class="mt-1 text-xs text-gray-400 leading-snug">${escapeHtml(m.note)}</div>`:''}
                 </div>`;
             }).join('');
             return `<div class="border border-gray-100 rounded-xl p-3 bg-white">
@@ -474,7 +475,7 @@
         const selectUi=document.getElementById('meal-select-ui');
         if(!currentMealPlan){ result.classList.add('hidden'); return; }
         selectUi.classList.add('hidden');
-        ['breakfast','lunch','dinner'].forEach(meal=>{ const m=currentMealPlan[meal]||{}; document.getElementById(`${meal}-name`).textContent=m.name||''; document.getElementById(`${meal}-ingredients`).textContent='재료: '+(m.ingredients||[]).join(', '); document.getElementById(`${meal}-howto`).textContent=m.how_to||''; const nut=m.nutrition||{}; document.getElementById(`${meal}-nutrition`).innerHTML=`<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🔥 ${nut.calories||0}kcal</span><span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🥩 단 ${nut.protein_g||0}g</span><span class="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">🌾 탄 ${nut.carbs_g||0}g</span><span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">🧈 지 ${nut.fat_g||0}g</span>`; });
+        ['breakfast','lunch','dinner'].forEach(meal=>{ const m=currentMealPlan[meal]||{}; document.getElementById(`${meal}-name`).textContent=m.name||''; document.getElementById(`${meal}-ingredients`).textContent='재료: '+(m.ingredients||[]).join(', '); document.getElementById(`${meal}-howto`).textContent=m.how_to||''; const nut=m.nutrition||{}; const nutEl=document.getElementById(`${meal}-nutrition`); nutEl.innerHTML=`<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🔥 ${nut.calories||0}kcal</span><span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🥩 단 ${nut.protein_g||0}g</span><span class="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">🌾 탄 ${nut.carbs_g||0}g</span><span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">🧈 지 ${nut.fat_g||0}g</span>`+(m.note?`<div class="text-xs text-gray-400 mt-1 w-full">${escapeHtml(m.note)}</div>`:''); });
         document.getElementById('meal-note').textContent=currentMealPlan.note||'';
         const missing = getMissingIngredients(currentMealPlan);
         const warningEl = document.getElementById('meal-warning-detail');

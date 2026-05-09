@@ -39,6 +39,7 @@ class MealItem(BaseModel):
     ingredients: list[str] = Field(default_factory=list)
     how_to: str = ''
     nutrition: MealNutrition = Field(default_factory=MealNutrition)
+    note: str = ''
 
 class MealPlan(BaseModel):
     """식단 계획"""
