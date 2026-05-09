@@ -8,4 +8,6 @@ services:
     environment:
       - DATABASE_URL=sqlite:////app/data/diet.db
       - LOG_LEVEL=DEBUG
+      - ALLOWED_ORIGINS=http://localhost:1414,http://127.0.0.1:1414
+      # 실사용 시 본인 PC IP로 변경 (예: http://192.168.0.10:1414)
     restart: unless-stopped

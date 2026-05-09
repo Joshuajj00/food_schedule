@@ -23,12 +23,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS 허용 출처: 환경변수에서 콤마 구분으로 받음, 기본은 localhost만
+ALLOWED_ORIGINS = os.getenv(
+    'ALLOWED_ORIGINS',
+    'http://localhost:1414,http://127.0.0.1:1414'
+).split(',')
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS if o.strip()],
     allow_credentials=False,
-    allow_methods=['*'],
-    allow_headers=['*'],
+    allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allow_headers=['Content-Type', 'Authorization'],
 )
 
 app.include_router(ingredients.router)
