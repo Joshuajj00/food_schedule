@@ -1,30 +1,45 @@
 """
 API 키 암호화/복호화 유틸리티
 - cryptography 라이브러리의 Fernet(대칭키) 사용
-- 암호화 키는 환경변수 ENCRYPTION_KEY 또는 자동 생성된 키 파일에서 로드
+- 우선순위: 환경변수 ENCRYPTION_KEY → ENCRYPTION_KEY_PATH 파일 → 기본 경로
+- 기본 경로는 데이터 DB와 분리된 위치 사용 (보안)
 """
 import os
 import base64
+from pathlib import Path
 from cryptography.fernet import Fernet
 
-_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', '.encryption_key')
+# 키 파일 위치 결정 우선순위:
+# 1. 환경변수 ENCRYPTION_KEY (직접 키값)
+# 2. 환경변수 ENCRYPTION_KEY_PATH (키파일 경로)
+# 3. ~/.config/diet_assistant/encryption.key (DB와 분리된 기본 위치)
+
+_DEFAULT_KEY_DIR = Path.home() / '.config' / 'diet_assistant'
+_DEFAULT_KEY_FILE = _DEFAULT_KEY_DIR / 'encryption.key'
 
 
 def _get_or_create_key() -> bytes:
-    """환경변수 또는 키 파일에서 암호화 키를 로드. 없으면 생성."""
-    env_key = os.getenv('ENCRYPTION_KEY', '')
+    env_key = os.getenv('ENCRYPTION_KEY', '').strip()
     if env_key:
-        return env_key.encode() if len(env_key) == 44 else base64.urlsafe_b64encode(env_key.encode().ljust(32)[:32])
+        # 44자 base64 키이거나, 32자 미만 패스워드는 패딩 후 변환
+        if len(env_key) == 44:
+            return env_key.encode()
+        return base64.urlsafe_b64encode(env_key.encode().ljust(32)[:32])
 
-    if os.path.exists(_KEY_FILE):
-        with open(_KEY_FILE, 'rb') as f:
-            return f.read()
+    key_path_env = os.getenv('ENCRYPTION_KEY_PATH', '').strip()
+    key_file = Path(key_path_env) if key_path_env else _DEFAULT_KEY_FILE
 
+    if key_file.exists():
+        return key_file.read_bytes()
+
+    # 신규 생성
     key = Fernet.generate_key()
-    os.makedirs(os.path.dirname(_KEY_FILE), exist_ok=True)
-    with open(_KEY_FILE, 'wb') as f:
-        f.write(key)
-    os.chmod(_KEY_FILE, 0o600)
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    key_file.write_bytes(key)
+    try:
+        os.chmod(key_file, 0o600)
+    except (OSError, NotImplementedError):
+        pass  # Windows 등 권한 변경 미지원 환경 무시
     return key
 
 

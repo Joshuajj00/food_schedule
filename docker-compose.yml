@@ -5,9 +5,11 @@ services:
       - "1414:8000"
     volumes:
       - ./data:/app/data
+      - ./secrets:/secrets:ro   # 호스트의 secrets 폴더를 읽기 전용 마운트
     environment:
       - DATABASE_URL=sqlite:////app/data/diet.db
       - LOG_LEVEL=DEBUG
+      - ENCRYPTION_KEY_PATH=/secrets/encryption.key
       - ALLOWED_ORIGINS=http://localhost:1414,http://127.0.0.1:1414
       # 실사용 시 본인 PC IP로 변경 (예: http://192.168.0.10:1414)
     restart: unless-stopped

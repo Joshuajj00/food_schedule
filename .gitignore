@@ -12,6 +12,12 @@ venv/
 # Data (contains sensitive info like .encryption_key, db files)
 data/
 
+# Secrets (암호화 키 파일 - DB와 분리 보관)
+secrets/
+
+# Backups
+backups/
+
 # Environment
 .env
 *.env
