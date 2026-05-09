@@ -32,6 +32,7 @@ def _get_settings(db: Session) -> DecryptedLLMSettings:
         thinking_mode=row.thinking_mode,
         thinking_budget=row.thinking_budget,
         reasoning_effort=row.reasoning_effort,
+        food_api_key=decrypt(row.food_api_key or ''),
     )
 
 

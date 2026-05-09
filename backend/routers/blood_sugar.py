@@ -1,6 +1,7 @@
 """혈당 기록 CRUD 라우터"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import case
 from typing import List
 from datetime import date
 
@@ -23,7 +24,17 @@ async def get_records(
         query = query.filter(BloodSugar.date >= start_date)
     if end_date:
         query = query.filter(BloodSugar.date <= end_date)
-    records = query.order_by(BloodSugar.date.desc(), BloodSugar.time.asc()).all()
+    time_order = case(
+        (BloodSugar.time == '아침식전', 1),
+        (BloodSugar.time == '아침식후', 2),
+        (BloodSugar.time == '점심식전', 3),
+        (BloodSugar.time == '점심식후', 4),
+        (BloodSugar.time == '저녁식전', 5),
+        (BloodSugar.time == '저녁식후', 6),
+        (BloodSugar.time == '취침전', 7),
+        else_=8,
+    )
+    records = query.order_by(BloodSugar.date.desc(), time_order).all()
     logger.debug(f"혈당 기록 조회: {len(records)}건")
     return records
 
