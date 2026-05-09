@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.database import get_db, LLMSettings as LLMSettingsDB
 from backend.models import LLMSettingsUpdate, LLMSettingsResponse
@@ -46,7 +46,7 @@ async def update_settings(body: LLMSettingsUpdate, db: Session = Depends(get_db)
     row = _get_or_create(db)
     for field, value in body.model_dump().items():
         setattr(row, field, value)
-    row.updated_at = datetime.utcnow()
+    row.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
     logger.info(f"설정 업데이트: provider={body.provider}, model={body.model_name}, format={body.api_format}")

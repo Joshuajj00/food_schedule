@@ -46,12 +46,19 @@ async def generate_meal(db: Session = Depends(get_db)):
                 status_code=500,
                 detail=f"AI 응답 파싱 오류: {result.get('raw_response', 'Unknown error')}"
             )
-        meal_plan = MealPlan(
-            breakfast=result.get('breakfast', {}),
-            lunch=result.get('lunch', {}),
-            dinner=result.get('dinner', {}),
-            note=result.get('note', ''),
-        )
+        try:
+            meal_plan = MealPlan(
+                breakfast=result.get('breakfast', {}),
+                lunch=result.get('lunch', {}),
+                dinner=result.get('dinner', {}),
+                note=result.get('note', ''),
+            )
+        except Exception as ve:
+            logger.warning(f"MealPlan 모델 검증 실패: {ve}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI 응답 형식이 올바르지 않습니다: {str(ve)[:200]}"
+            )
         logger.info(f"식단 생성 완료: 아침={meal_plan.breakfast.name}, 점심={meal_plan.lunch.name}, 저녁={meal_plan.dinner.name}")
         return meal_plan
     except HTTPException:

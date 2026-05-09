@@ -173,10 +173,12 @@ class AIClient:
             "content-type": "application/json",
         }
 
+        final_system = self._apply_cot(system_prompt, settings)
+
         max_tokens = 4096
         payload: dict = {
             "model": settings.model_name,
-            "system": system_prompt,
+            "system": final_system,
             "messages": [{"role": "user", "content": user_prompt}],
             "stream": settings.streaming,
         }
@@ -187,8 +189,6 @@ class AIClient:
             payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
             # thinking 토큰은 max_tokens 한도에 포함되므로 실제 텍스트 응답용 여유분을 반드시 추가
             max_tokens = budget + 4096
-        elif settings.thinking_mode == "cot":
-            payload["messages"][0]["content"] += "\n\n먼저 단계적으로 추론한 뒤 최종 JSON을 출력하라."
 
         payload["max_tokens"] = max_tokens
 

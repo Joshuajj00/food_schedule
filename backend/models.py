@@ -13,15 +13,14 @@ class IngredientCreate(BaseModel):
 
 class IngredientResponse(BaseModel):
     """식재료 응답"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     quantity: float
     unit: str
     expiry_date: Optional[date] = None
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 # ========== 식단 관련 모델 ==========
 
@@ -48,6 +47,8 @@ class MealHistoryCreate(BaseModel):
 
 class MealHistoryResponse(BaseModel):
     """식단 기록 응답"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     date: date
     breakfast: Optional[str] = None
@@ -55,9 +56,6 @@ class MealHistoryResponse(BaseModel):
     dinner: Optional[str] = None
     note: Optional[str] = None
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 # ========== 예산 관련 모델 ==========
 
@@ -69,14 +67,13 @@ class BudgetCreate(BaseModel):
 
 class BudgetResponse(BaseModel):
     """예산 기록 응답"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     item: str
     price: int
     purchase_date: date
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 class WeeklyBudgetResponse(BaseModel):
     """주간 예산 현황 응답"""
@@ -101,11 +98,10 @@ class LLMSettingsUpdate(BaseModel):
 
 class LLMSettingsResponse(LLMSettingsUpdate):
     """LLM 설정 응답"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 # ========== 예산 추천 모델 ==========
 

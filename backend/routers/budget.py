@@ -48,6 +48,12 @@ async def recommend_purchases(body: BudgetRecommendRequest, db: Session = Depend
             except Exception as e:
                 logger.warning(f"추천 항목 파싱 건너뜀: {item} — {e}")
 
+        if not items:
+            raise HTTPException(
+                status_code=500,
+                detail="AI가 유효한 구매 추천 항목을 생성하지 못했습니다. 다시 시도해주세요."
+            )
+
         response = BudgetRecommendResponse(
             items=items,
             total_estimated=result.get('total_estimated', 0),
