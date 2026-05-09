@@ -7,6 +7,7 @@ from backend.database import get_db, Ingredient, MealHistory, LLMSettings
 from backend.models import MealPlan, MealHistoryCreate, MealHistoryResponse, IngredientResponse
 from backend.ai_client import ai_client
 from backend.prompt_builder import build_meal_prompt
+from backend.crypto_utils import decrypt
 from backend.logger import get_logger
 
 logger = get_logger('routers.meal')
@@ -25,6 +26,7 @@ def _get_settings(db: Session) -> LLMSettings:
             status_code=503,
             detail='모델명이 설정되지 않았습니다. 설정 탭에서 모델명을 입력해주세요.'
         )
+    row.api_key = decrypt(row.api_key)
     return row
 
 

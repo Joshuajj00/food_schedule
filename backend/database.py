@@ -19,6 +19,7 @@ class Ingredient(Base):
     name = Column(String, nullable=False)
     quantity = Column(Float, nullable=False)
     unit = Column(String, nullable=False)
+    category = Column(String, default='기타')
     expiry_date = Column(Date, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -59,6 +60,29 @@ class LLMSettings(Base):
     thinking_budget  = Column(Integer, default=8000)
     reasoning_effort = Column(String, default='none')     # none | low | medium | high
     updated_at       = Column(DateTime, server_default=func.now())
+
+# 혈당 기록 테이블
+class BloodSugar(Base):
+    __tablename__ = 'blood_sugar'
+
+    id        = Column(Integer, primary_key=True, index=True)
+    date      = Column(Date, nullable=False)
+    time      = Column(String, nullable=False)            # 아침식전 / 아침식후 / 점심식전 / 점심식후 / 저녁식전 / 저녁식후 / 취침전
+    level     = Column(Integer, nullable=False)           # mg/dL
+    note      = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+# 식단 즐겨찾기 테이블
+class MealFavorite(Base):
+    __tablename__ = 'meal_favorite'
+
+    id        = Column(Integer, primary_key=True, index=True)
+    name      = Column(String, nullable=False)            # 즐겨찾기 이름
+    breakfast = Column(String, nullable=True)
+    lunch     = Column(String, nullable=True)
+    dinner    = Column(String, nullable=True)
+    note      = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 # DB 초기화 함수
 def init_db():

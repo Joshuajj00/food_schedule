@@ -7,7 +7,7 @@ import os
 
 from backend.database import init_db
 import backend.logger  # noqa: F401 — 로깅 초기화
-from backend.routers import ingredients, meal, budget
+from backend.routers import ingredients, meal, budget, blood_sugar, favorites, backup
 from backend.routers import settings as settings_router
 
 
@@ -35,6 +35,9 @@ app.include_router(ingredients.router)
 app.include_router(meal.router)
 app.include_router(budget.router)
 app.include_router(settings_router.router)
+app.include_router(blood_sugar.router)
+app.include_router(favorites.router)
+app.include_router(backup.router)
 
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend')
 if os.path.exists(os.path.join(frontend_path, 'index.html')):

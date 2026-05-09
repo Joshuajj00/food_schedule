@@ -1,0 +1,16 @@
+{
+  "name": "혈당 관리 식단 어시스턴트",
+  "short_name": "식단 어시스턴트",
+  "description": "위 소매 절제술 후 혈당 관리를 위한 AI 식단 추천 앱",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥗</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

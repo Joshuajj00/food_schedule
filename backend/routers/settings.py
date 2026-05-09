@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from backend.database import get_db, LLMSettings as LLMSettingsDB
 from backend.models import LLMSettingsUpdate, LLMSettingsResponse
 from backend.ai_client import ai_client
+from backend.crypto_utils import encrypt, decrypt
 from backend.logger import get_logger
 
 logger = get_logger('routers.settings')
@@ -34,9 +35,16 @@ def _get_or_create(db: Session) -> LLMSettingsDB:
     return row
 
 
+def _decrypt_settings(row: LLMSettingsDB) -> LLMSettingsDB:
+    """DB에서 읽은 설정의 api_key를 복호화 (in-place)"""
+    row.api_key = decrypt(row.api_key)
+    return row
+
+
 @router.get("", response_model=LLMSettingsResponse)
 async def get_settings(db: Session = Depends(get_db)):
     row = _get_or_create(db)
+    row = _decrypt_settings(row)
     logger.debug(f"설정 조회: provider={row.provider}, model={row.model_name}")
     return row
 
@@ -45,10 +53,13 @@ async def get_settings(db: Session = Depends(get_db)):
 async def update_settings(body: LLMSettingsUpdate, db: Session = Depends(get_db)):
     row = _get_or_create(db)
     for field, value in body.model_dump().items():
+        if field == 'api_key':
+            value = encrypt(value)
         setattr(row, field, value)
     row.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
+    row = _decrypt_settings(row)
     logger.info(f"설정 업데이트: provider={body.provider}, model={body.model_name}, format={body.api_format}")
     return row
 
@@ -56,6 +67,7 @@ async def update_settings(body: LLMSettingsUpdate, db: Session = Depends(get_db)
 @router.post("/test")
 async def test_connection(db: Session = Depends(get_db)):
     settings = _get_or_create(db)
+    settings = _decrypt_settings(settings)
     if not settings.model_name:
         raise HTTPException(status_code=400, detail="모델명이 설정되지 않았습니다.")
 

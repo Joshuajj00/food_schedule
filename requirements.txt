@@ -4,3 +4,4 @@ sqlalchemy==2.0.25
 pydantic==2.5.3
 httpx==0.26.0
 python-dotenv==1.0.0
+cryptography==42.0.0
