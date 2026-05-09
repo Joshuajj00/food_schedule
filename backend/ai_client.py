@@ -9,11 +9,19 @@ logger = get_logger('ai_client')
 
 
 def _mask_headers(headers: dict) -> dict:
+    """API 키 등 민감 헤더를 마스킹. 앞 4자 + '***' + 뒤 4자 형식."""
     masked = dict(headers)
-    for key in ('Authorization', 'x-api-key'):
-        if key in masked:
+    sensitive_keys = ('Authorization', 'x-api-key', 'X-Api-Key', 'api-key')
+    for key in masked:
+        if key in sensitive_keys:
             v = masked[key]
-            masked[key] = v[:12] + '***' if len(v) > 12 else '***'
+            if v.startswith('Bearer '):
+                token = v[7:]
+                masked[key] = f"Bearer {token[:4]}***{token[-4:]}" if len(token) > 8 else 'Bearer ***'
+            elif len(v) > 8:
+                masked[key] = f"{v[:4]}***{v[-4:]}"
+            else:
+                masked[key] = '***'
     return masked
 
 
