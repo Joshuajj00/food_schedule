@@ -109,7 +109,30 @@
                 <button onclick="generateMeal()" id="generate-btn" class="w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 transition-all">🍳 식단 생성하기</button>
             </div>
             <div id="loading" class="hidden flex justify-center py-8"><div class="loading-spinner"></div></div>
+
+            <!-- 끼니별 선택 UI: 옵션×끼니 매트릭스 -->
+            <div id="meal-select-ui" class="hidden space-y-3">
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <h2 class="text-base font-semibold text-gray-800 mb-2">📋 끼니별 선택</h2>
+                    <p class="text-xs text-gray-400 mb-3">각 끼니(아침/점심/저녁)마다 원하는 옵션을 개별 선택하세요.</p>
+                    <div id="meal-select-matrix" class="space-y-3"></div>
+                </div>
+
+                <!-- 선택 요약 + 액션 -->
+                <div id="meal-selection-summary" class="bg-emerald-50 rounded-xl p-4 border border-emerald-200 hidden">
+                    <h3 class="text-sm font-semibold text-emerald-800 mb-3">✅ 현재 선택한 식단</h3>
+                    <div id="selected-meals-preview" class="space-y-2"></div>
+                    <div id="meal-warning" class="hidden bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700 mt-3"></div>
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="saveMealToHistory()" class="flex-1 bg-gray-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-gray-700 transition-all">📝 기록 저장</button>
+                        <button onclick="saveAsFavorite()" class="flex-1 bg-yellow-500 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-yellow-600 transition-all">⭐ 즐겨찾기</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 즐겨찾기/기록에서 선택 시 보여주는 상세 뷰 -->
             <div id="meal-result" class="space-y-3 hidden">
+                <div id="meal-warning-detail" class="hidden bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700"></div>
                 <div class="card bg-white rounded-xl shadow-sm p-4">
                     <div class="flex items-center mb-2"><span class="text-xl mr-2">🌅</span><h3 class="text-base font-semibold text-gray-800">아침</h3></div>
                     <h4 id="breakfast-name" class="text-emerald-600 font-medium text-sm mb-1"></h4>
@@ -134,10 +157,6 @@
                 <div class="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
                     <h3 class="text-sm font-semibold text-emerald-800 mb-1">💡 조언</h3>
                     <p id="meal-note" class="text-sm text-emerald-700"></p>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="saveMealToHistory()" class="flex-1 bg-gray-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-gray-700 transition-all">📝 기록 저장</button>
-                    <button onclick="saveAsFavorite()" class="flex-1 bg-yellow-500 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-yellow-600 transition-all">⭐ 즐겨찾기</button>
                 </div>
             </div>
         </div>
@@ -273,7 +292,7 @@
 
     <script>
     const API_BASE = '';
-    let currentMealPlan = null, selectedUnit = 'g', _selectedCategory = '', _bloodChart = null, _budgetItems = [];
+    let currentMealPlan = null, currentMealOptions = [], selectedMealIndex = null, selectedUnit = 'g', _selectedCategory = '', _bloodChart = null, _budgetItems = [], ingredientsCache = [];
 
     function escapeHtml(s) { if (s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     function showToast(m,e=false){ const t=document.getElementById('toast'); document.getElementById('toast-message').textContent=m; t.className=`fixed bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg transition-all text-white z-50 ${e?'bg-red-600':'bg-gray-800'}`; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),3000); }
@@ -310,7 +329,7 @@
 
     async function loadIngredients(){
         const s=document.getElementById('ing-search').value.trim(); let u=`${API_BASE}/api/ingredients?`; if(s) u+=`search=${encodeURIComponent(s)}&`; if(_selectedCategory) u+=`category=${encodeURIComponent(_selectedCategory)}&`;
-        try{ const res=await fetch(u); renderIngredients(await res.json()); checkExpiryWarnings(); }catch{ showToast('식재료 목록을 불러오지 못했습니다',true); }
+        try{ const list = await (await fetch(u)).json(); ingredientsCache = list; renderIngredients(list); checkExpiryWarnings(); }catch{ showToast('식재료 목록을 불러오지 못했습니다',true); }
     }
     function renderIngredients(list){
         const el=document.getElementById('ingredients-list'); document.getElementById('ing-count').textContent=`(${list.length}종)`;
@@ -340,21 +359,153 @@
     }
     async function deleteIngredient(id){ if(!confirm('삭제하시겠습니까?')) return; try{ const res=await fetch(`${API_BASE}/api/ingredients/${id}`,{method:'DELETE'}); if(res.ok){ showToast('삭제되었습니다'); loadIngredients(); } else showToast('삭제 실패',true); }catch{ showToast('삭제 중 오류',true); } }
 
+    // 끼니별 개별 선택 상태
+    const _selectedMeals = { breakfast: null, lunch: null, dinner: null };
+    const MEAL_TYPES = ['breakfast','lunch','dinner'];
+    const MEAL_LABELS = {breakfast:'🌅 아침', lunch:'☀️ 점심', dinner:'🌙 저녁'};
+
     async function generateMeal(){
-        const btn=document.getElementById('generate-btn'),loading=document.getElementById('loading'),result=document.getElementById('meal-result');
-        btn.disabled=true;btn.textContent='생성 중...'; loading.classList.remove('hidden');result.classList.add('hidden');
+        const btn=document.getElementById('generate-btn'),loading=document.getElementById('loading');
+        const selectUi=document.getElementById('meal-select-ui'),result=document.getElementById('meal-result');
+        btn.disabled=true;btn.textContent='생성 중...'; loading.classList.remove('hidden');
+        selectUi.classList.add('hidden');result.classList.add('hidden');
         try{ const res=await fetch(`${API_BASE}/api/meal/generate`,{method:'POST'}); const data=await res.json(); if(!res.ok) throw new Error(data.detail||'식단 생성 실패');
-            currentMealPlan=data;
-            ['breakfast','lunch','dinner'].forEach(meal=>{ const m=data[meal]||{}; document.getElementById(`${meal}-name`).textContent=m.name||''; document.getElementById(`${meal}-ingredients`).textContent='재료: '+(m.ingredients||[]).join(', '); document.getElementById(`${meal}-howto`).textContent=m.how_to||''; const nut=m.nutrition||{}; document.getElementById(`${meal}-nutrition`).innerHTML=`<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🔥 ${nut.calories||0}kcal</span><span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🥩 단 ${nut.protein_g||0}g</span><span class="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">🌾 탄 ${nut.carbs_g||0}g</span><span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">🧈 지 ${nut.fat_g||0}g</span>`; });
-            document.getElementById('meal-note').textContent=data.note||''; result.classList.remove('hidden'); showToast('식단이 생성되었습니다');
+            currentMealOptions=data.options || [];
+            _selectedMeals.breakfast = null;
+            _selectedMeals.lunch = null;
+            _selectedMeals.dinner = null;
+            currentMealPlan = null;
+            renderMealMatrix(currentMealOptions);
+            selectUi.classList.remove('hidden');
         }catch(e){ showToast(e.message||'생성 중 오류',true); }
         finally{ btn.disabled=false;btn.textContent='🍳 식단 생성하기';loading.classList.add('hidden'); }
     }
-    async function saveMealToHistory(){ if(!currentMealPlan){ showToast('저장할 식단이 없습니다',true); return; } const today=new Date().toISOString().split('T')[0]; try{ const res=await fetch(`${API_BASE}/api/meal/history`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:today,breakfast:currentMealPlan.breakfast?.name,lunch:currentMealPlan.lunch?.name,dinner:currentMealPlan.dinner?.name,note:currentMealPlan.note})}); showToast(res.ok?'식단이 기록되었습니다':'기록 실패',!res.ok); }catch{ showToast('저장 중 오류',true); } }
-    async function saveAsFavorite(){ if(!currentMealPlan){ showToast('저장할 식단이 없습니다',true); return; } const name=prompt('즐겨찾기 이름',new Date().toLocaleDateString('ko-KR')+' 식단'); if(!name) return; try{ const res=await fetch(`${API_BASE}/api/favorites`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,breakfast:currentMealPlan.breakfast?.name,lunch:currentMealPlan.lunch?.name,dinner:currentMealPlan.dinner?.name,note:currentMealPlan.note})}); if(res.ok){ showToast('즐겨찾기에 추가됨'); loadFavorites(); } else showToast('추가 실패',true); }catch{ showToast('추가 중 오류',true); } }
 
-    async function loadFavorites(){ try{ const res=await fetch(`${API_BASE}/api/favorites`); const list=await res.json(); const el=document.getElementById('favorites-list'); if(!list.length){ el.innerHTML='<p class="text-gray-400 text-center py-2 text-xs">저장된 즐겨찾기가 없습니다</p>'; return; } el.innerHTML=list.map(f=>`<div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-700 cursor-pointer hover:text-emerald-600" onclick="alert('아침: ${escapeHtml(f.breakfast||'-')}\\n점심: ${escapeHtml(f.lunch||'-')}\\n저녁: ${escapeHtml(f.dinner||'-')}\\n\\n${escapeHtml(f.note||'')}')">⭐ ${escapeHtml(f.name)}</span><button onclick="deleteFavorite(${f.id})" class="text-red-400 hover:text-red-600 p-1 text-xs">✕</button></div>`).join(''); }catch{} }
+    function renderMealMatrix(options){
+        const el=document.getElementById('meal-select-matrix');
+        if(!options.length){ el.innerHTML='<p class="text-gray-400 text-center py-4 text-sm">옵션을 생성하지 못했습니다.</p>'; return; }
+        // 각 끼니별로 모든 옵션의 해당 메뉴를 카드로 표시
+        el.innerHTML = MEAL_TYPES.map(mealType=>{
+            const mealCards = options.map((opt, oi)=>{
+                const m = opt[mealType] || {};
+                const nut = m.nutrition || {};
+                return `<div class="meal-card border-2 border-gray-200 rounded-lg p-2 cursor-pointer hover:border-emerald-400 transition-all"
+                    data-meal="${mealType}" data-option="${oi}"
+                    onclick="pickMeal('${mealType}', ${oi})">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-gray-700">${escapeHtml(m.name||'-')}</span>
+                        <span class="text-xs text-gray-400">옵션${oi+1}</span>
+                    </div>
+                    <div class="flex gap-1 mt-1 text-xs">
+                        <span class="bg-blue-50 text-blue-600 px-1 rounded">kcal ${nut.calories||0}</span>
+                        <span class="bg-red-50 text-red-600 px-1 rounded">단 ${nut.protein_g||0}g</span>
+                        <span class="bg-yellow-50 text-yellow-600 px-1 rounded">탄 ${nut.carbs_g||0}g</span>
+                    </div>
+                </div>`;
+            }).join('');
+            return `<div class="border border-gray-100 rounded-xl p-3 bg-white">
+                <h3 class="text-sm font-semibold text-gray-800 mb-2">${MEAL_LABELS[mealType]}</h3>
+                <div class="grid grid-cols-1 gap-1.5">${mealCards}</div>
+            </div>`;
+        }).join('');
+    }
+
+    function pickMeal(mealType, optionIndex){
+        const opt = currentMealOptions[optionIndex];
+        _selectedMeals[mealType] = { optionIndex, mealData: opt ? opt[mealType] : null };
+        // UI 하이라이트
+        document.querySelectorAll(`.meal-card[data-meal="${mealType}"]`).forEach(card=>{
+            const isSel = parseInt(card.dataset.option) === optionIndex;
+            card.classList.toggle('border-emerald-500', isSel);
+            card.classList.toggle('bg-emerald-50', isSel);
+            card.classList.toggle('border-gray-200', !isSel);
+            card.classList.toggle('bg-white', !isSel);
+        });
+        refreshMealSummary();
+    }
+
+    function refreshMealSummary(){
+        const summary=document.getElementById('meal-selection-summary');
+        const preview=document.getElementById('selected-meals-preview');
+        const hasAny = _selectedMeals.breakfast || _selectedMeals.lunch || _selectedMeals.dinner;
+        if(!hasAny){ summary.classList.add('hidden'); return; }
+
+        // currentMealPlan 구성
+        const plan = { breakfast: null, lunch: null, dinner: null, note: '' };
+        let totalProtein = 0;
+        preview.innerHTML = MEAL_TYPES.map(mt=>{
+            const sel = _selectedMeals[mt];
+            if(!sel || !sel.mealData) return `<div class="text-xs text-gray-400">${MEAL_LABELS[mt]}: 미선택</div>`;
+            const m = sel.mealData;
+            plan[mt] = m;
+            totalProtein += (m.nutrition?.protein_g || 0);
+            return `<div class="flex items-center justify-between p-2 bg-white rounded-lg">
+                <div><span class="text-xs text-gray-500">${MEAL_LABELS[mt]}</span>
+                <span class="text-sm font-medium text-gray-800 ml-1">${escapeHtml(m.name)}</span></div>
+                <span class="text-xs text-gray-400">옵션${sel.optionIndex+1}</span>
+            </div>`;
+        }).join('');
+
+        // 단백질 합계 표시
+        preview.innerHTML += `<div class="text-xs text-gray-500 mt-1">🥩 하루 단백질: <b class="${totalProtein>=45?'text-emerald-600':'text-red-600'}">${totalProtein.toFixed(1)}g</b> ${totalProtein>=45?'✅':'⚠️ 목표 45g 미달'}</div>`;
+        currentMealPlan = plan;
+
+        // 재료 부족 경고
+        const missing = getMissingIngredients(plan);
+        const warningEl = document.getElementById('meal-warning');
+        if(missing.length){ warningEl.textContent = `⚠️ 현재 보유 식재료 중 부족할 수 있는 항목: ${missing.join(', ')}`; warningEl.classList.remove('hidden'); }
+        else{ warningEl.textContent = ''; warningEl.classList.add('hidden'); }
+
+        summary.classList.remove('hidden');
+    }
+
+    function displaySelectedMeal(){
+        // 즐겨찾기/기록 상세 보기용 (기존 호환)
+        const result=document.getElementById('meal-result');
+        const selectUi=document.getElementById('meal-select-ui');
+        if(!currentMealPlan){ result.classList.add('hidden'); return; }
+        selectUi.classList.add('hidden');
+        ['breakfast','lunch','dinner'].forEach(meal=>{ const m=currentMealPlan[meal]||{}; document.getElementById(`${meal}-name`).textContent=m.name||''; document.getElementById(`${meal}-ingredients`).textContent='재료: '+(m.ingredients||[]).join(', '); document.getElementById(`${meal}-howto`).textContent=m.how_to||''; const nut=m.nutrition||{}; document.getElementById(`${meal}-nutrition`).innerHTML=`<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🔥 ${nut.calories||0}kcal</span><span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🥩 단 ${nut.protein_g||0}g</span><span class="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">🌾 탄 ${nut.carbs_g||0}g</span><span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">🧈 지 ${nut.fat_g||0}g</span>`; });
+        document.getElementById('meal-note').textContent=currentMealPlan.note||'';
+        const missing = getMissingIngredients(currentMealPlan);
+        const warningEl = document.getElementById('meal-warning-detail');
+        if(missing.length){ warningEl.textContent = `⚠️ 현재 보유 식재료 중 부족할 수 있는 항목: ${missing.join(', ')}`; warningEl.classList.remove('hidden'); }
+        else{ warningEl.textContent = ''; warningEl.classList.add('hidden'); }
+        result.classList.remove('hidden');
+    }
+
+    function getMissingIngredients(plan){
+        const required = [...(plan.breakfast?.ingredients||[]), ...(plan.lunch?.ingredients||[]), ...(plan.dinner?.ingredients||[])];
+        const missing = [];
+        required.forEach(itemText=>{
+            const normalized = itemText.toLowerCase();
+            const found = ingredientsCache.some(inv=>{
+                const invName = String(inv.name).toLowerCase();
+                return normalized.includes(invName) || invName.includes(normalized);
+            });
+            if(!found && !missing.includes(itemText)) missing.push(itemText);
+        });
+        return missing;
+    }
+
+    async function saveMealToHistory(){
+        if(!currentMealPlan || (!currentMealPlan.breakfast && !currentMealPlan.lunch && !currentMealPlan.dinner)){ showToast('저장할 식단이 없습니다. 끼니를 선택해주세요.',true); return; }
+        const today=new Date().toISOString().split('T')[0];
+        try{ const res=await fetch(`${API_BASE}/api/meal/history`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:today,breakfast:currentMealPlan.breakfast?.name||null,lunch:currentMealPlan.lunch?.name||null,dinner:currentMealPlan.dinner?.name||null,note:currentMealPlan.note})});
+            showToast(res.ok?'식단이 기록되었습니다':'기록 실패',!res.ok); }catch{ showToast('저장 중 오류',true); }
+    }
+
+    async function saveAsFavorite(){
+        if(!currentMealPlan || (!currentMealPlan.breakfast && !currentMealPlan.lunch && !currentMealPlan.dinner)){ showToast('저장할 식단이 없습니다. 끼니를 선택해주세요.',true); return; }
+        const name=prompt('즐겨찾기 이름',new Date().toLocaleDateString('ko-KR')+' 식단'); if(!name) return;
+        try{ const res=await fetch(`${API_BASE}/api/favorites`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,breakfast:currentMealPlan.breakfast?.name||null,lunch:currentMealPlan.lunch?.name||null,dinner:currentMealPlan.dinner?.name||null,note:currentMealPlan.note,breakfast_data:currentMealPlan.breakfast||null,lunch_data:currentMealPlan.lunch||null,dinner_data:currentMealPlan.dinner||null})});
+            if(res.ok){ showToast('즐겨찾기에 추가됨'); loadFavorites(); } else showToast('추가 실패',true); }catch{ showToast('추가 중 오류',true); }
+    }
+
+    async function loadFavorites(){ try{ const res=await fetch(`${API_BASE}/api/favorites`); const list=await res.json(); renderFavorites(list); }catch{ showToast('즐겨찾기 목록을 불러오지 못했습니다',true); } }
+    function renderFavorites(list){ const el=document.getElementById('favorites-list'); if(!list.length){ el.innerHTML='<p class="text-gray-400 text-center py-2 text-xs">저장된 즐겨찾기가 없습니다</p>'; return; } el.innerHTML=list.map(f=>{ const summary = f.breakfast_data?`아침: ${escapeHtml(f.breakfast_data.name)} · 점심: ${escapeHtml(f.lunch_data?.name||'-')} · 저녁: ${escapeHtml(f.dinner_data?.name||'-')}`:`아침: ${escapeHtml(f.breakfast||'-')} · 점심: ${escapeHtml(f.lunch||'-')} · 저녁: ${escapeHtml(f.dinner||'-')}`; const note = f.note?`<p class="text-xs text-gray-500 mt-1">${escapeHtml(f.note)}</p>`:''; return `<div class="bg-gray-50 rounded-lg p-3"><div class="flex items-center justify-between gap-2"><div class="min-w-0"><button onclick="selectFavoriteMeal(${f.id})" class="text-sm font-medium text-gray-700 text-left hover:text-emerald-600 w-full">⭐ ${escapeHtml(f.name)}</button><div class="text-xs text-gray-500 mt-1">${summary}</div>${note}</div><button onclick="deleteFavorite(${f.id})" class="text-red-400 hover:text-red-600 p-1 text-xs">✕</button></div></div>`; }).join(''); window._favoriteCache = list; }
     async function deleteFavorite(id){ if(!confirm('즐겨찾기를 삭제하시겠습니까?')) return; try{ const res=await fetch(`${API_BASE}/api/favorites/${id}`,{method:'DELETE'}); if(res.ok){ showToast('삭제됨'); loadFavorites(); } }catch{ showToast('삭제 실패',true); } }
+    function selectFavoriteMeal(id){ const fav = (window._favoriteCache||[]).find(f=>f.id===id); if(!fav){ showToast('즐겨찾기를 찾을 수 없습니다',true); return; } if(fav.breakfast_data && fav.lunch_data && fav.dinner_data){ currentMealPlan = {breakfast:fav.breakfast_data, lunch:fav.lunch_data, dinner:fav.dinner_data, note:fav.note||''}; selectedMealIndex = null; document.getElementById('meal-select-ui').classList.add('hidden'); displaySelectedMeal(); showToast('즐겨찾기 식단이 선택되었습니다. 재고 부족 여부를 확인하세요.'); } else { showToast('이 즐겨찾기는 상세 식단 정보가 없어 부족 재료 확인이 어렵습니다.',true); currentMealPlan = {breakfast:{name:fav.breakfast||''}, lunch:{name:fav.lunch||''}, dinner:{name:fav.dinner||''}, note:fav.note||''}; displaySelectedMeal(); } }
 
     async function loadHistory(){ try{ const res=await fetch(`${API_BASE}/api/meal/history`); renderHistory(await res.json()); }catch{ showToast('기록을 불러오지 못했습니다',true); } }
     function renderHistory(h){ const el=document.getElementById('history-list'); if(!h.length){ el.innerHTML='<p class="text-gray-400 text-center py-4 text-sm">기록된 식단이 없습니다</p>'; return; } el.innerHTML=h.map(r=>`<div class="bg-gray-50 rounded-lg p-3"><div class="font-medium text-gray-800 text-sm mb-1">${escapeHtml(r.date)}</div><div class="text-xs text-gray-600 space-y-0.5"><div>🌅 아침: ${escapeHtml(r.breakfast||'-')}</div><div>☀️ 점심: ${escapeHtml(r.lunch||'-')}</div><div>🌙 저녁: ${escapeHtml(r.dinner||'-')}</div>${r.note?`<div class="text-emerald-600 mt-1">💡 ${escapeHtml(r.note)}</div>`:''}</div></div>`).join(''); }

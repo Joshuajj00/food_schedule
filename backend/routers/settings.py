@@ -36,7 +36,9 @@ def _get_or_create(db: Session) -> LLMSettingsDB:
 
 
 def _decrypt_settings(row: LLMSettingsDB) -> LLMSettingsDB:
-    """DB에서 읽은 설정의 api_key를 복호화 (in-place)"""
+    """DB에서 읽은 설정의 api_key를 복호화 (in-place).
+    주의: 이 함수는 ORM 객체의 api_key를 평문으로 변경합니다.
+    이후 DB flush/commit이 발생하지 않도록 호출 측에서 주의해야 합니다."""
     row.api_key = decrypt(row.api_key)
     return row
 

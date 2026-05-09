@@ -24,6 +24,7 @@ def _get_or_create_key() -> bytes:
     os.makedirs(os.path.dirname(_KEY_FILE), exist_ok=True)
     with open(_KEY_FILE, 'wb') as f:
         f.write(key)
+    os.chmod(_KEY_FILE, 0o600)
     return key
 
 
@@ -44,5 +45,8 @@ def decrypt(ciphertext: str) -> str:
     try:
         return _fernet.decrypt(ciphertext.encode()).decode()
     except Exception:
-        # 이전 버전 평문 데이터 호환: 복호화 실패 시 그대로 반환
-        return ciphertext
+        import logging
+        logging.getLogger('backend.crypto_utils').warning(
+            "API 키 복호화 실패 — 암호화 키 불일치 또는 데이터 손상. 빈 문자열 반환."
+        )
+        return ''

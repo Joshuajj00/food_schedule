@@ -60,8 +60,10 @@ class AIClient:
                 {"role": "user", "content": user_prompt},
             ],
             "stream": settings.streaming,
-            "format": "json",  # Ollama JSON 모드 강제 — 없으면 자연어로 응답할 수 있음
         }
+        # Ollama JSON 모드: 스트리밍 시 format 옵션 제외 (일부 버전에서 think:true 와 충돌)
+        if not settings.streaming:
+            payload["format"] = "json"
         if settings.thinking_mode == "think":
             payload["think"] = True
 
@@ -243,14 +245,34 @@ class AIClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            match = re.search(r"\{[\s\S]*\}", text)
-            if match:
+            # 중첩 JSON 대응: 첫 { 부터 마지막 } 까지 정확히 추출
+            start = text.find('{')
+            end = text.rfind('}')
+            if start != -1 and end != -1 and end > start:
                 try:
-                    return json.loads(match.group())
+                    return json.loads(text[start:end + 1])
                 except json.JSONDecodeError:
                     pass
         logger.warning(f"JSON 파싱 실패 ({len(text)}자): {text[:200]}")
         return {"error": "JSON 형식 응답을 파싱할 수 없습니다.", "raw_response": text}
+
+    async def _post_with_retry(self, client: httpx.AsyncClient, url: str,
+                                payload: dict, headers: dict, timeout: float,
+                                stream: bool = False, max_retries: int = 3) -> httpx.Response:
+        """지수 백오프 재시도 로직 (1s, 2s, 4s)"""
+        import asyncio
+        last_exc = None
+        for attempt in range(max_retries):
+            try:
+                if stream:
+                    return client  # stream 호출은 caller에서 처리
+                return await client.post(url, json=payload, headers=headers, timeout=timeout)
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
+                last_exc = e
+                wait = 2 ** attempt  # 1, 2, 4초
+                logger.warning(f"HTTP 요청 실패 (시도 {attempt + 1}/{max_retries}), {wait}초 후 재시도: {e}")
+                await asyncio.sleep(wait)
+        raise last_exc
 
 
 ai_client = AIClient()

@@ -22,6 +22,7 @@ def _get_settings(db: Session) -> LLMSettings:
         raise HTTPException(status_code=503, detail='LLM 설정이 없습니다. 설정 탭에서 먼저 설정해주세요.')
     if not row.model_name:
         raise HTTPException(status_code=503, detail='모델명이 설정되지 않았습니다.')
+    # ORM 객체를 mutate하지 않고 복호화된 api_key를 별도 속성으로 설정
     row.api_key = decrypt(row.api_key)
     return row
 

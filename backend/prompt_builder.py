@@ -19,33 +19,42 @@ def build_meal_prompt(ingredients: List[IngredientResponse]) -> tuple[str, str]:
    - 탄수화물이 필요한 경우 현미, 귀리, 통밀 등 저GI 식품을 극소량(10g 미만)만 사용
    - 가능하면 탄수화물 없이 단백질+채소만으로 구성할 것
 4. 단백질 식품(두부, 달걀, 생선, 닭가슴살, 콩류, 살코기 등)을 매끼 반드시 포함하라.
-5. 사용 가능한 양념: 소금, 간장, 된장, 고추장(소량), 참기름, 식초, 마늘, 생강, 파, 깨, 후추
-6. 보유 식재료만으로 조리 가능한 메뉴만 제안하라.
-7. 유통기한이 임박한 식재료를 우선 사용하라.
-8. 조리법은 소량 조리에 맞게 한국 가정에서 쉽게 따라할 수 있도록 간단히 서술하라.
-9. 응답 형식: JSON으로만 출력하라.
+5. 하루 전체 단백질 섭취량은 최소 45g 이상이 되어야 한다.
+6. 사용 가능한 양념: 소금, 간장, 된장, 고추장(소량), 참기름, 식초, 마늘, 생강, 파, 깨, 후추
+7. 보유 식재료만으로 조리 가능한 메뉴만 제안하라.
+8. 유통기한이 임박한 식재료를 우선 사용하라.
+9. 조리법은 소량 조리에 맞게 한국 가정에서 쉽게 따라할 수 있도록 간단히 서술하라.
+10. 3가지 서로 다른 식단 옵션을 제시하라. 각 옵션은 메뉴명, 재료 구성, 조리법, 영양 정보가 중복되지 않아야 한다.
+11. 응답 형식: JSON으로만 출력하라.
 
 출력 JSON 형식:
 {
-  "breakfast": {
-    "name": "메뉴명",
-    "ingredients": ["재료1 소량", "재료2"],
-    "how_to": "조리법(소량 기준)",
-    "nutrition": { "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0 }
-  },
-  "lunch": {
-    "name": "메뉴명",
-    "ingredients": ["재료1"],
-    "how_to": "조리법(소량 기준)",
-    "nutrition": { "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0 }
-  },
-  "dinner": {
-    "name": "메뉴명",
-    "ingredients": ["재료1"],
-    "how_to": "조리법(소량 기준)",
-    "nutrition": { "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0 }
-  },
-  "note": "혈당 관리 및 위 절제술 후 식사 조언"
+  "options": [
+    {
+      "title": "옵션 1",
+      "breakfast": {
+        "name": "메뉴명",
+        "ingredients": ["재료1 소량", "재료2"],
+        "how_to": "조리법(소량 기준)",
+        "nutrition": { "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0 }
+      },
+      "lunch": {
+        "name": "메뉴명",
+        "ingredients": ["재료1"],
+        "how_to": "조리법(소량 기준)",
+        "nutrition": { "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0 }
+      },
+      "dinner": {
+        "name": "메뉴명",
+        "ingredients": ["재료1"],
+        "how_to": "조리법(소량 기준)",
+        "nutrition": { "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0 }
+      },
+      "note": "이 옵션의 특징과 하루 단백질 목표"
+    },
+    ...
+  ],
+  "note": "전체 옵션 요약"
 }"""
 
     if not ingredients:
@@ -53,8 +62,10 @@ def build_meal_prompt(ingredients: List[IngredientResponse]) -> tuple[str, str]:
     else:
         lines = []
         today = date.today()
+        category_icon = {'단백질':'🥩','채소':'🥬','탄수화물':'🌾','유제품':'🥛','양념':'🧂','기타':'📦'}
         for ing in ingredients:
-            line = f"- {ing.name}: {ing.quantity}{ing.unit}"
+            cat = category_icon.get(ing.category, '📦')
+            line = f"- {cat} [{ing.category}] {ing.name}: {ing.quantity}{ing.unit}"
             if ing.expiry_date:
                 days_left = (ing.expiry_date - today).days
                 if days_left <= 3:
@@ -68,11 +79,12 @@ def build_meal_prompt(ingredients: List[IngredientResponse]) -> tuple[str, str]:
 현재 보유한 식재료:
 {ingredient_list}
 
-위 식재료로 3끼 식단을 추천해주세요.
+위 식재료로 서로 다른 3가지 식단 옵션을 추천해주세요.
 - 위 소매 절제술 후 1끼 섭취량(100~150ml)에 맞는 소량 메뉴로 구성하세요.
 - 탄수화물은 1끼 5g 이하로 극도로 제한하세요. 가능하면 0g에 가깝게 구성하세요.
-- 단백질을 매끼 우선 포함하고, 혈당 급등을 방지하는 식단으로 구성해주세요.
+- 단백질을 매끼 우선 포함하고, 하루 전체 단백질 섭취량은 최소 45g 이상이 되도록 구성하세요.
 - 유통기한이 임박한 식재료를 우선 사용하세요.
+- 각 옵션은 서로 다른 재료 조합과 조리법, 메뉴 이름을 가지도록 하세요.
 - 각 메뉴의 예상 영양소(칼로리, 단백질, 탄수화물, 지방)를 함께 제공하세요.
 """
 

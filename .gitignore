@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+**/__pycache__
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# Virtual env
+.venv/
+venv/
+
+# Data (contains sensitive info like .encryption_key, db files)
+data/
+
+# Environment
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,5 +1,5 @@
 ﻿from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from typing import Optional, Literal
 from datetime import date, datetime
 
 # ========== 식재료 관련 모델 ==========
@@ -7,7 +7,7 @@ from datetime import date, datetime
 class IngredientCreate(BaseModel):
     """식재료 생성 요청"""
     name: str
-    quantity: float
+    quantity: float = Field(gt=0)
     unit: str
     category: str = '기타'   # 단백질 / 채소 / 탄수화물 / 유제품 / 양념 / 기타
     expiry_date: Optional[date] = None
@@ -22,16 +22,16 @@ class IngredientResponse(BaseModel):
     unit: str
     category: str = '기타'
     expiry_date: Optional[date] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 # ========== 식단 관련 모델 ==========
 
 class MealNutrition(BaseModel):
     """영양소 정보"""
-    calories: int = 0
-    protein_g: int = 0
-    carbs_g: int = 0
-    fat_g: int = 0
+    calories: float = 0.0
+    protein_g: float = 0.0
+    carbs_g: float = 0.0
+    fat_g: float = 0.0
 
 class MealItem(BaseModel):
     """개별 식단 아이템"""
@@ -45,6 +45,18 @@ class MealPlan(BaseModel):
     breakfast: MealItem = Field(default_factory=MealItem)
     lunch: MealItem = Field(default_factory=MealItem)
     dinner: MealItem = Field(default_factory=MealItem)
+    note: str = ''
+
+class MealPlanOption(BaseModel):
+    """여러 식단 옵션 중 하나"""
+    title: str = ''
+    breakfast: MealItem = Field(default_factory=MealItem)
+    lunch: MealItem = Field(default_factory=MealItem)
+    dinner: MealItem = Field(default_factory=MealItem)
+    note: str = ''
+
+class MealPlanListResponse(BaseModel):
+    options: list[MealPlanOption]
     note: str = ''
 
 class MealHistoryCreate(BaseModel):
@@ -65,7 +77,7 @@ class MealHistoryResponse(BaseModel):
     lunch: Optional[str] = None
     dinner: Optional[str] = None
     note: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 # ========== 예산 관련 모델 ==========
 
@@ -83,7 +95,7 @@ class BudgetResponse(BaseModel):
     item: str
     price: int
     purchase_date: date
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 class WeeklyBudgetResponse(BaseModel):
     """주간 예산 현황 응답"""
@@ -111,7 +123,7 @@ class LLMSettingsResponse(LLMSettingsUpdate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 # ========== 예산 추천 모델 ==========
 
@@ -152,8 +164,8 @@ class IngredientUpdate(BaseModel):
 class BloodSugarCreate(BaseModel):
     """혈당 기록 생성 요청"""
     date: date
-    time: str   # 아침식전 / 아침식후 / 점심식전 / 점심식후 / 저녁식전 / 저녁식후 / 취침전
-    level: int
+    time: Literal['아침식전', '아침식후', '점심식전', '점심식후', '저녁식전', '저녁식후', '취침전']
+    level: int = Field(ge=0, le=500)
     note: Optional[str] = None
 
 class BloodSugarResponse(BaseModel):
@@ -165,7 +177,7 @@ class BloodSugarResponse(BaseModel):
     time: str
     level: int
     note: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 # ========== 즐겨찾기 모델 ==========
 
@@ -176,6 +188,9 @@ class MealFavoriteCreate(BaseModel):
     lunch: Optional[str] = None
     dinner: Optional[str] = None
     note: Optional[str] = None
+    breakfast_data: Optional[MealItem] = None
+    lunch_data: Optional[MealItem] = None
+    dinner_data: Optional[MealItem] = None
 
 class MealFavoriteResponse(BaseModel):
     """즐겨찾기 응답"""
@@ -186,8 +201,11 @@ class MealFavoriteResponse(BaseModel):
     breakfast: Optional[str] = None
     lunch: Optional[str] = None
     dinner: Optional[str] = None
+    breakfast_data: Optional[MealItem] = None
+    lunch_data: Optional[MealItem] = None
+    dinner_data: Optional[MealItem] = None
     note: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 # ========== 백업 모델 ==========
 

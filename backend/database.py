@@ -76,13 +76,16 @@ class BloodSugar(Base):
 class MealFavorite(Base):
     __tablename__ = 'meal_favorite'
 
-    id        = Column(Integer, primary_key=True, index=True)
-    name      = Column(String, nullable=False)            # 즐겨찾기 이름
-    breakfast = Column(String, nullable=True)
-    lunch     = Column(String, nullable=True)
-    dinner    = Column(String, nullable=True)
-    note      = Column(String, nullable=True)
-    created_at = Column(DateTime, default=func.now())
+    id             = Column(Integer, primary_key=True, index=True)
+    name           = Column(String, nullable=False)            # 즐겨찾기 이름
+    breakfast      = Column(String, nullable=True)
+    lunch          = Column(String, nullable=True)
+    dinner         = Column(String, nullable=True)
+    breakfast_data = Column(String, nullable=True)
+    lunch_data     = Column(String, nullable=True)
+    dinner_data    = Column(String, nullable=True)
+    note           = Column(String, nullable=True)
+    created_at     = Column(DateTime, default=func.now())
 
 # DB 초기화 함수
 def init_db():
@@ -96,6 +99,9 @@ def _migrate(engine):
     migrations = [
         # (테이블명, 컬럼명, 컬럼정의)
         ('ingredients', 'category', 'VARCHAR DEFAULT \'기타\''),
+        ('meal_favorite', 'breakfast_data', 'TEXT'),
+        ('meal_favorite', 'lunch_data', 'TEXT'),
+        ('meal_favorite', 'dinner_data', 'TEXT'),
     ]
     with engine.connect() as conn:
         for table, column, col_def in migrations:

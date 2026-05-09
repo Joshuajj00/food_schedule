@@ -4,7 +4,7 @@ from typing import List
 from datetime import date
 
 from backend.database import get_db, Ingredient, MealHistory, LLMSettings
-from backend.models import MealPlan, MealHistoryCreate, MealHistoryResponse, IngredientResponse
+from backend.models import MealPlanListResponse, MealPlanOption, MealHistoryCreate, MealHistoryResponse, IngredientResponse
 from backend.ai_client import ai_client
 from backend.prompt_builder import build_meal_prompt
 from backend.crypto_utils import decrypt
@@ -26,11 +26,12 @@ def _get_settings(db: Session) -> LLMSettings:
             status_code=503,
             detail='모델명이 설정되지 않았습니다. 설정 탭에서 모델명을 입력해주세요.'
         )
+    # ORM 객체를 mutate하지 않고 복호화된 api_key를 별도 속성으로 설정
     row.api_key = decrypt(row.api_key)
     return row
 
 
-@router.post('/generate', response_model=MealPlan)
+@router.post('/generate', response_model=MealPlanListResponse)
 async def generate_meal(db: Session = Depends(get_db)):
     ingredients = db.query(Ingredient).all()
     if not ingredients:
@@ -43,26 +44,66 @@ async def generate_meal(db: Session = Depends(get_db)):
 
     try:
         result = await ai_client.generate(system_prompt, user_prompt, settings)
-        if 'error' in result and 'breakfast' not in result:
+        if 'error' in result and 'options' not in result:
             raise HTTPException(
                 status_code=500,
                 detail=f"AI 응답 파싱 오류: {result.get('raw_response', 'Unknown error')}"
             )
-        try:
-            meal_plan = MealPlan(
-                breakfast=result.get('breakfast', {}),
-                lunch=result.get('lunch', {}),
-                dinner=result.get('dinner', {}),
-                note=result.get('note', ''),
-            )
-        except Exception as ve:
-            logger.warning(f"MealPlan 모델 검증 실패: {ve}")
+
+        options_data = result.get('options')
+        if not isinstance(options_data, list) and 'breakfast' in result:
+            options_data = [{
+                'title': '옵션 1',
+                'breakfast': result.get('breakfast', {}),
+                'lunch': result.get('lunch', {}),
+                'dinner': result.get('dinner', {}),
+                'note': result.get('note', ''),
+            }]
+
+        options = []
+        for idx, option_data in enumerate(options_data or []):
+            try:
+                option = MealPlanOption(
+                    title=option_data.get('title', f'옵션 {idx + 1}'),
+                    breakfast=option_data.get('breakfast', {}),
+                    lunch=option_data.get('lunch', {}),
+                    dinner=option_data.get('dinner', {}),
+                    note=option_data.get('note', ''),
+                )
+                options.append(option)
+            except Exception as ve:
+                logger.warning(f"MealPlanOption 모델 검증 실패: {ve}")
+
+        if len(options) < 3:
             raise HTTPException(
                 status_code=500,
-                detail=f"AI 응답 형식이 올바르지 않습니다: {str(ve)[:200]}"
+                detail='AI가 3가지 옵션을 모두 생성하지 못했습니다. 다시 시도해주세요.'
             )
-        logger.info(f"식단 생성 완료: 아침={meal_plan.breakfast.name}, 점심={meal_plan.lunch.name}, 저녁={meal_plan.dinner.name}")
-        return meal_plan
+
+        seen_signatures = set()
+        for option in options:
+            signature = f"{option.breakfast.name}|{option.lunch.name}|{option.dinner.name}"
+            if signature in seen_signatures:
+                raise HTTPException(
+                    status_code=500,
+                    detail='AI가 중복된 식단 옵션을 생성했습니다. 다시 시도해주세요.'
+                )
+            seen_signatures.add(signature)
+
+            total_protein = (
+                option.breakfast.nutrition.protein_g
+                + option.lunch.nutrition.protein_g
+                + option.dinner.nutrition.protein_g
+            )
+            if total_protein < 45:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f'AI가 하루 단백질 45g 기준을 충족하지 못했습니다 (합계 {total_protein:.1f}g).'
+                )
+
+        response = MealPlanListResponse(options=options, note=result.get('note', ''))
+        logger.info(f"식단 생성 완료: 옵션 {len(options)}개")
+        return response
     except HTTPException:
         raise
     except Exception as e:
