@@ -8,8 +8,16 @@ services:
       - ./secrets:/secrets:ro   # 호스트의 secrets 폴더를 읽기 전용 마운트
     environment:
       - DATABASE_URL=sqlite:////app/data/diet.db
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
       - ENCRYPTION_KEY_PATH=/secrets/encryption.key
       - ALLOWED_ORIGINS=http://localhost:1414,http://127.0.0.1:1414
       # 실사용 시 본인 PC IP로 변경 (예: http://192.168.0.10:1414)
+      # 식약처 영양 DB API 키 (선택): https://www.data.go.kr 에서 발급
+      # - FOOD_API_KEY=발급받은_키
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped

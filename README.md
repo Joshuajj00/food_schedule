@@ -37,19 +37,28 @@
 
 ## 빠른 시작
 
-### Docker (권장)
+### 운영 실행 (Docker 권장)
 
 ```bash
-# Docker Engine 설치 (Ubuntu/Debian)
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER   # 재로그인 필요
-
-# 클론 후 실행
-git clone <repo-url> && cd diet2
-chmod +x setup.sh && ./setup.sh
+docker compose up -d --build
 ```
 
-출력된 `http://<IP>:<포트>` 로 로컬 네트워크 내 모든 기기에서 접속 가능합니다.
+### 개발 환경 실행 (Linux/Mac)
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+mkdir -p data && ./run.sh
+```
+
+### 개발 환경 실행 (Windows)
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+run.bat
+```
 
 ### 포트 변경
 
@@ -62,14 +71,6 @@ ports:
 
 ```bash
 docker compose up -d
-```
-
-### 로컬 개발
-
-```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-mkdir -p data && chmod +x run.sh && ./run.sh
 ```
 
 ---
@@ -181,11 +182,31 @@ diet2/
 |------|--------|------|
 | `DATABASE_URL` | `sqlite:///./data/diet.db` | SQLite DB 경로 |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (TRACE / DEBUG / INFO) |
+| `ENCRYPTION_KEY_PATH` | `~/.config/diet_assistant/encryption.key` | API 키 암호화 키 파일 경로 |
+| `ALLOWED_ORIGINS` | `http://localhost:1414,http://127.0.0.1:1414` | CORS 허용 출처 (콤마 구분) |
+| `FOOD_API_KEY` | (없음) | 식약처 식품영양성분DB API 키 (선택) |
+
+### 디버깅 시 로그 레벨 변경
+`docker-compose.yml`의 `LOG_LEVEL`을 `DEBUG` 또는 `TRACE`로 변경 후 `docker compose up -d`
+
+---
+
+## 자동 백업 설정
+
+`scripts/backup.sh`를 cron으로 매일 새벽 2시 자동 실행:
+
+```bash
+crontab -e
+# 다음 줄 추가
+0 2 * * * /home/{사용자}/food_schedule/scripts/backup.sh >> /var/log/diet_backup.log 2>&1
+```
+
+백업 파일은 `backups/` 폴더에 30일간 보관됩니다 (`RETENTION_DAYS` 환경변수로 조정 가능).
 
 ---
 
 ## 주의사항
 
-- API 키는 DB에 평문 저장됩니다. 외부 공개 서버에는 배포하지 마세요.
-- `data/` 디렉터리는 `.dockerignore`로 이미지에서 제외되며 Docker volume으로 관리됩니다.
+- API 키는 DB에 **암호화**하여 저장됩니다. 암호화 키 파일(`secrets/encryption.key`)은 별도 보관하세요.
+- `data/`, `secrets/`, `backups/` 디렉터리는 `.gitignore`에 포함되어 버전 관리에서 제외됩니다.
 - Ollama Cloud의 일부 모델은 유료 구독이 필요합니다 (`https://ollama.com/upgrade`).
