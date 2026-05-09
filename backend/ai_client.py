@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import json
 import re
@@ -86,7 +87,7 @@ class AIClient:
         async with httpx.AsyncClient(timeout=180.0) as client:
             if settings.streaming:
                 return await self._collect_ollama_stream(client, url, payload, headers)
-            resp = await client.post(url, json=payload, headers=headers)
+            resp = await self._post_with_retry(client, url, payload, headers)
             if resp.status_code >= 400:
                 logger.error(f"[Ollama] HTTP {resp.status_code} 응답 본문: {resp.text}")
             resp.raise_for_status()
@@ -144,7 +145,7 @@ class AIClient:
         async with httpx.AsyncClient(timeout=180.0) as client:
             if settings.streaming:
                 return await self._collect_openai_stream(client, url, payload, headers)
-            resp = await client.post(url, json=payload, headers=headers)
+            resp = await self._post_with_retry(client, url, payload, headers)
             if resp.status_code >= 400:
                 logger.error(f"[OpenAI] HTTP {resp.status_code} 응답 본문: {resp.text}")
             resp.raise_for_status()
@@ -209,7 +210,7 @@ class AIClient:
         async with httpx.AsyncClient(timeout=300.0) as client:
             if settings.streaming:
                 return await self._collect_anthropic_stream(client, url, payload, headers)
-            resp = await client.post(url, json=payload, headers=headers)
+            resp = await self._post_with_retry(client, url, payload, headers)
             if resp.status_code >= 400:
                 logger.error(f"[Anthropic] HTTP {resp.status_code} 응답 본문: {resp.text}")
             resp.raise_for_status()
@@ -264,23 +265,40 @@ class AIClient:
         logger.warning(f"JSON 파싱 실패 ({len(text)}자): {text[:200]}")
         return {"error": "JSON 형식 응답을 파싱할 수 없습니다.", "raw_response": text}
 
-    async def _post_with_retry(self, client: httpx.AsyncClient, url: str,
-                                payload: dict, headers: dict, timeout: float,
-                                stream: bool = False, max_retries: int = 3) -> httpx.Response:
-        """지수 백오프 재시도 로직 (1s, 2s, 4s)"""
-        import asyncio
+    async def _post_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        payload: dict,
+        headers: dict,
+        max_retries: int = 3,
+    ) -> httpx.Response:
+        """지수 백오프 재시도. 5xx, 타임아웃, 네트워크 오류만 재시도. 4xx는 즉시 실패."""
         last_exc = None
         for attempt in range(max_retries):
             try:
-                if stream:
-                    return client  # stream 호출은 caller에서 처리
-                return await client.post(url, json=payload, headers=headers, timeout=timeout)
+                resp = await client.post(url, json=payload, headers=headers)
+                if 500 <= resp.status_code < 600 and attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        f"HTTP {resp.status_code} 응답, {wait}초 후 재시도 ({attempt + 1}/{max_retries})"
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                return resp
             except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
                 last_exc = e
-                wait = 2 ** attempt  # 1, 2, 4초
-                logger.warning(f"HTTP 요청 실패 (시도 {attempt + 1}/{max_retries}), {wait}초 후 재시도: {e}")
-                await asyncio.sleep(wait)
-        raise last_exc
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        f"네트워크 오류, {wait}초 후 재시도 ({attempt + 1}/{max_retries}): {e}"
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("재시도 로직 오류")
 
 
 ai_client = AIClient()
