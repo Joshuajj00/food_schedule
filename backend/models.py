@@ -216,3 +216,22 @@ class BackupData(BaseModel):
     budget: list[BudgetResponse]
     blood_sugar: list[BloodSugarResponse]
     favorites: list[MealFavoriteResponse]
+
+
+# ========== 내부용: 복호화된 LLM 설정 ==========
+
+from dataclasses import dataclass
+
+@dataclass
+class DecryptedLLMSettings:
+    """ORM 객체와 분리된 평문 설정 객체.
+    DB에 저장되지 않으며, AI 호출용으로만 사용."""
+    provider: str
+    base_url: str
+    api_key: str
+    model_name: str
+    api_format: str
+    streaming: bool
+    thinking_mode: str
+    thinking_budget: int
+    reasoning_effort: str

@@ -5,7 +5,7 @@ from backend.database import get_db, Budget, LLMSettings, Ingredient
 from backend.models import (
     BudgetCreate, BudgetResponse, WeeklyBudgetResponse, MessageResponse,
     BudgetRecommendRequest, BudgetRecommendItem, BudgetRecommendResponse,
-    IngredientResponse,
+    IngredientResponse, DecryptedLLMSettings,
 )
 from backend.ai_client import ai_client
 from backend.prompt_builder import build_budget_prompt
@@ -16,15 +16,23 @@ logger = get_logger('routers.budget')
 router = APIRouter(prefix='/api/budget', tags=['budget'])
 
 
-def _get_settings(db: Session) -> LLMSettings:
+def _get_settings(db: Session) -> DecryptedLLMSettings:
     row = db.query(LLMSettings).first()
     if not row:
         raise HTTPException(status_code=503, detail='LLM 설정이 없습니다. 설정 탭에서 먼저 설정해주세요.')
     if not row.model_name:
         raise HTTPException(status_code=503, detail='모델명이 설정되지 않았습니다.')
-    # ORM 객체를 mutate하지 않고 복호화된 api_key를 별도 속성으로 설정
-    row.api_key = decrypt(row.api_key)
-    return row
+    return DecryptedLLMSettings(
+        provider=row.provider,
+        base_url=row.base_url,
+        api_key=decrypt(row.api_key),
+        model_name=row.model_name,
+        api_format=row.api_format,
+        streaming=row.streaming,
+        thinking_mode=row.thinking_mode,
+        thinking_budget=row.thinking_budget,
+        reasoning_effort=row.reasoning_effort,
+    )
 
 
 @router.post('/recommend', response_model=BudgetRecommendResponse)

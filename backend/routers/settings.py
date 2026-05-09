@@ -35,20 +35,28 @@ def _get_or_create(db: Session) -> LLMSettingsDB:
     return row
 
 
-def _decrypt_settings(row: LLMSettingsDB) -> LLMSettingsDB:
-    """DB에서 읽은 설정의 api_key를 복호화 (in-place).
-    주의: 이 함수는 ORM 객체의 api_key를 평문으로 변경합니다.
-    이후 DB flush/commit이 발생하지 않도록 호출 측에서 주의해야 합니다."""
-    row.api_key = decrypt(row.api_key)
-    return row
+def _to_response_dict(row: LLMSettingsDB) -> dict:
+    """ORM을 mutate하지 않고 평문 api_key를 포함한 dict 반환"""
+    return {
+        'id': row.id,
+        'provider': row.provider,
+        'base_url': row.base_url,
+        'api_key': decrypt(row.api_key),
+        'model_name': row.model_name,
+        'api_format': row.api_format,
+        'streaming': row.streaming,
+        'thinking_mode': row.thinking_mode,
+        'thinking_budget': row.thinking_budget,
+        'reasoning_effort': row.reasoning_effort,
+        'updated_at': row.updated_at,
+    }
 
 
 @router.get("", response_model=LLMSettingsResponse)
 async def get_settings(db: Session = Depends(get_db)):
     row = _get_or_create(db)
-    row = _decrypt_settings(row)
     logger.debug(f"설정 조회: provider={row.provider}, model={row.model_name}")
-    return row
+    return _to_response_dict(row)
 
 
 @router.put("", response_model=LLMSettingsResponse)
@@ -61,18 +69,28 @@ async def update_settings(body: LLMSettingsUpdate, db: Session = Depends(get_db)
     row.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
-    row = _decrypt_settings(row)
     logger.info(f"설정 업데이트: provider={body.provider}, model={body.model_name}, format={body.api_format}")
-    return row
+    return _to_response_dict(row)
 
 
 @router.post("/test")
 async def test_connection(db: Session = Depends(get_db)):
-    settings = _get_or_create(db)
-    settings = _decrypt_settings(settings)
-    if not settings.model_name:
+    from backend.models import DecryptedLLMSettings
+    row = _get_or_create(db)
+    if not row.model_name:
         raise HTTPException(status_code=400, detail="모델명이 설정되지 않았습니다.")
 
+    settings = DecryptedLLMSettings(
+        provider=row.provider,
+        base_url=row.base_url,
+        api_key=decrypt(row.api_key),
+        model_name=row.model_name,
+        api_format=row.api_format,
+        streaming=row.streaming,
+        thinking_mode=row.thinking_mode,
+        thinking_budget=row.thinking_budget,
+        reasoning_effort=row.reasoning_effort,
+    )
     logger.info(f"연결 테스트: provider={settings.provider}, model={settings.model_name}")
     test_system = "You are a test assistant. Respond only with valid JSON."
     test_user = 'Respond with exactly: {"ok": true}'

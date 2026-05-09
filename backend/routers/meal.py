@@ -4,7 +4,7 @@ from typing import List
 from datetime import date
 
 from backend.database import get_db, Ingredient, MealHistory, LLMSettings
-from backend.models import MealPlanListResponse, MealPlanOption, MealHistoryCreate, MealHistoryResponse, IngredientResponse
+from backend.models import MealPlanListResponse, MealPlanOption, MealHistoryCreate, MealHistoryResponse, IngredientResponse, DecryptedLLMSettings
 from backend.ai_client import ai_client
 from backend.prompt_builder import build_meal_prompt
 from backend.crypto_utils import decrypt
@@ -14,7 +14,7 @@ logger = get_logger('routers.meal')
 router = APIRouter(prefix='/api/meal', tags=['meal'])
 
 
-def _get_settings(db: Session) -> LLMSettings:
+def _get_settings(db: Session) -> DecryptedLLMSettings:
     row = db.query(LLMSettings).first()
     if not row:
         raise HTTPException(
@@ -26,9 +26,17 @@ def _get_settings(db: Session) -> LLMSettings:
             status_code=503,
             detail='모델명이 설정되지 않았습니다. 설정 탭에서 모델명을 입력해주세요.'
         )
-    # ORM 객체를 mutate하지 않고 복호화된 api_key를 별도 속성으로 설정
-    row.api_key = decrypt(row.api_key)
-    return row
+    return DecryptedLLMSettings(
+        provider=row.provider,
+        base_url=row.base_url,
+        api_key=decrypt(row.api_key),
+        model_name=row.model_name,
+        api_format=row.api_format,
+        streaming=row.streaming,
+        thinking_mode=row.thinking_mode,
+        thinking_budget=row.thinking_budget,
+        reasoning_effort=row.reasoning_effort,
+    )
 
 
 @router.post('/generate', response_model=MealPlanListResponse)
