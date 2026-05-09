@@ -16,13 +16,24 @@ Base = declarative_base()
 
 @event.listens_for(Engine, "connect")
 def _sqlite_pragmas(dbapi_connection, connection_record):
-    if 'sqlite' in DATABASE_URL:
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA busy_timeout=30000")
-        cursor.close()
+    if 'sqlite' not in DATABASE_URL:
+        return
+    cursor = dbapi_connection.cursor()
+    pragmas = [
+        "PRAGMA journal_mode=WAL",
+        "PRAGMA synchronous=NORMAL",
+        "PRAGMA foreign_keys=ON",
+        "PRAGMA busy_timeout=30000",
+    ]
+    for pragma in pragmas:
+        try:
+            cursor.execute(pragma)
+        except Exception as e:
+            import logging
+            logging.getLogger('backend.database').warning(
+                f"PRAGMA 설정 실패 ({pragma}): {e} — DB 디렉토리 쓰기 권한을 확인하세요."
+            )
+    cursor.close()
 
 # 식재료 테이블
 class Ingredient(Base):
