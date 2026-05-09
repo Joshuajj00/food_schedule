@@ -1,15 +1,28 @@
-﻿from sqlalchemy import create_engine, Column, Integer, String, Float, Date, DateTime, Boolean, func
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+﻿from sqlalchemy import create_engine, Column, Integer, String, Float, Date, DateTime, Boolean, func, event, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 
-# SQLite DB 경로 설정 (환경변수 또는 기본값)
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./data/diet.db')
 
-# check_same_thread=False: FastAPI async 환경에서 SQLite를 여러 스레드가 공유하기 때문에 필요
-engine = create_engine(DATABASE_URL, connect_args={'check_same_thread': False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={'check_same_thread': False, 'timeout': 30},
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+@event.listens_for(Engine, "connect")
+def _sqlite_pragmas(dbapi_connection, connection_record):
+    if 'sqlite' in DATABASE_URL:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
 
 # 식재료 테이블
 class Ingredient(Base):
