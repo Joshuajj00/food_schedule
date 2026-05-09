@@ -88,14 +88,13 @@ async def generate_meal(db: Session = Depends(get_db)):
                 detail='AI가 3가지 옵션을 모두 생성하지 못했습니다. 다시 시도해주세요.'
             )
 
+        warnings: list[str] = []
+
         seen_signatures = set()
-        for option in options:
+        for idx, option in enumerate(options):
             signature = f"{option.breakfast.name}|{option.lunch.name}|{option.dinner.name}"
             if signature in seen_signatures:
-                raise HTTPException(
-                    status_code=500,
-                    detail='AI가 중복된 식단 옵션을 생성했습니다. 다시 시도해주세요.'
-                )
+                warnings.append(f"옵션 {idx + 1}이 다른 옵션과 중복됩니다.")
             seen_signatures.add(signature)
 
             total_protein = (
@@ -104,13 +103,26 @@ async def generate_meal(db: Session = Depends(get_db)):
                 + option.dinner.nutrition.protein_g
             )
             if total_protein < 48:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f'AI가 하루 단백질 48g 기준을 충족하지 못했습니다 (합계 {total_protein:.1f}g).'
+                warnings.append(
+                    f"옵션 {idx + 1}: 하루 단백질이 {total_protein:.1f}g으로 목표(48g) 미달입니다."
                 )
 
-        response = MealPlanListResponse(options=options, note=result.get('note', ''))
-        logger.info(f"식단 생성 완료: 옵션 {len(options)}개")
+            total_carbs = (
+                option.breakfast.nutrition.carbs_g
+                + option.lunch.nutrition.carbs_g
+                + option.dinner.nutrition.carbs_g
+            )
+            if total_carbs > 15:
+                warnings.append(
+                    f"옵션 {idx + 1}: 하루 탄수화물이 {total_carbs:.1f}g으로 한도(15g) 초과입니다."
+                )
+
+        response = MealPlanListResponse(
+            options=options,
+            note=result.get('note', ''),
+            warnings=warnings,
+        )
+        logger.info(f"식단 생성 완료: 옵션 {len(options)}개, 경고 {len(warnings)}건")
         return response
     except HTTPException:
         raise

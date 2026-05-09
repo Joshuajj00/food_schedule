@@ -58,6 +58,7 @@ class MealPlanOption(BaseModel):
 class MealPlanListResponse(BaseModel):
     options: list[MealPlanOption]
     note: str = ''
+    warnings: list[str] = Field(default_factory=list)
 
 class MealHistoryCreate(BaseModel):
     """식단 기록 생성 요청"""
