@@ -108,7 +108,7 @@
                 <p class="text-xs text-gray-400 mb-3">탄수화물 5g 이하 · 단백질 우선 · 100~150ml 소량</p>
                 <button onclick="generateMeal()" id="generate-btn" class="w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 transition-all">🍳 식단 생성하기</button>
             </div>
-            <div id="loading" class="hidden flex justify-center py-8"><div class="loading-spinner"></div></div>
+            <div id="loading" class="hidden flex flex-col items-center py-8 gap-2"><div class="loading-spinner"></div><div id="loading-timer" class="text-xs text-gray-400">AI 식단 생성 중… <span id="loading-elapsed">0</span>초</div><div class="text-xs text-gray-300">모델에 따라 수 분이 걸릴 수 있습니다</div></div>
 
             <!-- 끼니별 선택 UI: 옵션×끼니 매트릭스 -->
             <div id="meal-select-ui" class="hidden space-y-3">
@@ -277,6 +277,36 @@
                 <button onclick="testConnection()" id="test-btn" class="flex-1 border-2 border-emerald-600 text-emerald-600 py-2.5 rounded-lg font-semibold text-sm hover:bg-emerald-50 transition-all">🔌 연결 테스트</button>
                 <button onclick="saveSettings()" class="flex-1 bg-emerald-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-emerald-700 transition-all">💾 저장</button>
             </div>
+
+            <!-- 식약처 영양 DB -->
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-base font-semibold text-gray-800">🥗 식약처 영양성분 DB</h2>
+                    <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">선택</span>
+                </div>
+                <p class="text-xs text-gray-400 mb-3">API 키를 등록하면 식단 생성 시 실제 영양 데이터로 검증합니다.</p>
+                <div class="mb-3">
+                    <label class="block text-xs text-gray-500 mb-1">식약처 API 키</label>
+                    <div class="relative">
+                        <input type="password" id="setting-food-api-key" placeholder="발급받은 API 키 입력" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 pr-14">
+                        <button onclick="toggleFoodApiKeyVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 px-2 py-1 hover:text-gray-800 rounded">보기</button>
+                    </div>
+                </div>
+                <!-- 튜토리얼 -->
+                <div class="border border-gray-100 rounded-lg overflow-hidden">
+                    <button onclick="document.getElementById('food-api-tutorial').classList.toggle('hidden');this.querySelector('span').textContent=document.getElementById('food-api-tutorial').classList.contains('hidden')?'▶':'▼'" class="w-full flex items-center justify-between px-3 py-2 bg-gray-50 text-xs text-gray-600 hover:bg-gray-100">
+                        <span class="font-medium">📖 API 키 발급 방법</span>
+                        <span>▶</span>
+                    </button>
+                    <div id="food-api-tutorial" class="hidden px-3 py-3 text-xs text-gray-600 space-y-2 bg-white">
+                        <div class="flex gap-2"><span class="flex-shrink-0 w-5 h-5 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-xs">1</span><div><span class="font-medium">공공데이터포털 가입</span><br><span class="text-gray-400">data.go.kr 접속 → 회원가입 / 로그인</span></div></div>
+                        <div class="flex gap-2"><span class="flex-shrink-0 w-5 h-5 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-xs">2</span><div><span class="font-medium">API 검색</span><br><span class="text-gray-400">검색창에 <strong>식품의약품안전처 식품영양성분 DB</strong> 입력 후 검색</span></div></div>
+                        <div class="flex gap-2"><span class="flex-shrink-0 w-5 h-5 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-xs">3</span><div><span class="font-medium">활용 신청</span><br><span class="text-gray-400">서비스명: <em>식품영양성분 DB (I2790)</em> → [활용신청] 클릭 → 목적 입력 후 신청</span></div></div>
+                        <div class="flex gap-2"><span class="flex-shrink-0 w-5 h-5 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-xs">4</span><div><span class="font-medium">키 확인 및 입력</span><br><span class="text-gray-400">마이페이지 → 활용현황 → 일반 인증키(Encoding) 복사 후 위 입력란에 붙여넣기</span></div></div>
+                        <div class="bg-amber-50 border border-amber-200 rounded p-2 text-amber-700">⏱ 승인까지 보통 1~2일 소요. 즉시발급 API는 승인 없이 바로 사용 가능합니다.</div>
+                    </div>
+                </div>
+            </div>
             <div class="bg-white rounded-xl shadow-sm p-4">
                 <h2 class="text-base font-semibold text-gray-800 mb-2">💿 데이터 백업</h2>
                 <div class="flex gap-2">
@@ -370,6 +400,8 @@
         const selectUi=document.getElementById('meal-select-ui'),result=document.getElementById('meal-result');
         btn.disabled=true;btn.textContent='생성 중...'; loading.classList.remove('hidden');
         selectUi.classList.add('hidden');result.classList.add('hidden');
+        let _elapsed=0; const _elapsedEl=document.getElementById('loading-elapsed'); _elapsedEl.textContent='0';
+        const _timer=setInterval(()=>{ _elapsed++; _elapsedEl.textContent=_elapsed; },1000);
         try{ const res=await fetch(`${API_BASE}/api/meal/generate`,{method:'POST'}); const data=await res.json(); if(!res.ok) throw new Error(data.detail||'식단 생성 실패');
             currentMealOptions=data.options || [];
             _selectedMeals.breakfast = null;
@@ -387,7 +419,7 @@
             }
             selectUi.classList.remove('hidden');
         }catch(e){ showToast(e.message||'생성 중 오류',true); }
-        finally{ btn.disabled=false;btn.textContent='🍳 식단 생성하기';loading.classList.add('hidden'); }
+        finally{ clearInterval(_timer); btn.disabled=false;btn.textContent='🍳 식단 생성하기';loading.classList.add('hidden'); }
     }
 
     function renderMealMatrix(options){
@@ -501,7 +533,7 @@
     async function saveMealToHistory(){
         if(!currentMealPlan || (!currentMealPlan.breakfast && !currentMealPlan.lunch && !currentMealPlan.dinner)){ showToast('저장할 식단이 없습니다. 끼니를 선택해주세요.',true); return; }
         const today=new Date().toISOString().split('T')[0];
-        try{ const res=await fetch(`${API_BASE}/api/meal/history`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:today,breakfast:currentMealPlan.breakfast?.name||null,lunch:currentMealPlan.lunch?.name||null,dinner:currentMealPlan.dinner?.name||null,note:currentMealPlan.note})});
+        try{ const res=await fetch(`${API_BASE}/api/meal/history`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:today,breakfast:currentMealPlan.breakfast?.name||null,lunch:currentMealPlan.lunch?.name||null,dinner:currentMealPlan.dinner?.name||null,note:currentMealPlan.note,breakfast_data:currentMealPlan.breakfast||null,lunch_data:currentMealPlan.lunch||null,dinner_data:currentMealPlan.dinner||null})});
             showToast(res.ok?'식단이 기록되었습니다':'기록 실패',!res.ok); }catch{ showToast('저장 중 오류',true); }
     }
 
@@ -518,7 +550,19 @@
     function selectFavoriteMeal(id){ const fav = (window._favoriteCache||[]).find(f=>f.id===id); if(!fav){ showToast('즐겨찾기를 찾을 수 없습니다',true); return; } if(fav.breakfast_data && fav.lunch_data && fav.dinner_data){ currentMealPlan = {breakfast:fav.breakfast_data, lunch:fav.lunch_data, dinner:fav.dinner_data, note:fav.note||''}; selectedMealIndex = null; document.getElementById('meal-select-ui').classList.add('hidden'); displaySelectedMeal(); showToast('즐겨찾기 식단이 선택되었습니다. 재고 부족 여부를 확인하세요.'); } else { showToast('이 즐겨찾기는 상세 식단 정보가 없어 부족 재료 확인이 어렵습니다.',true); currentMealPlan = {breakfast:{name:fav.breakfast||''}, lunch:{name:fav.lunch||''}, dinner:{name:fav.dinner||''}, note:fav.note||''}; displaySelectedMeal(); } }
 
     async function loadHistory(){ try{ const res=await fetch(`${API_BASE}/api/meal/history`); renderHistory(await res.json()); }catch{ showToast('기록을 불러오지 못했습니다',true); } }
-    function renderHistory(h){ const el=document.getElementById('history-list'); if(!h.length){ el.innerHTML='<p class="text-gray-400 text-center py-4 text-sm">기록된 식단이 없습니다</p>'; return; } el.innerHTML=h.map(r=>`<div class="bg-gray-50 rounded-lg p-3"><div class="font-medium text-gray-800 text-sm mb-1">${escapeHtml(r.date)}</div><div class="text-xs text-gray-600 space-y-0.5"><div>🌅 아침: ${escapeHtml(r.breakfast||'-')}</div><div>☀️ 점심: ${escapeHtml(r.lunch||'-')}</div><div>🌙 저녁: ${escapeHtml(r.dinner||'-')}</div>${r.note?`<div class="text-emerald-600 mt-1">💡 ${escapeHtml(r.note)}</div>`:''}</div></div>`).join(''); }
+    function renderHistoryMealDetail(data, fallbackName, label, icon) {
+        if (!data) return `<div>${icon} ${label}: ${escapeHtml(fallbackName||'-')}</div>`;
+        const name = escapeHtml(data.name || '-');
+        const id = `hist-detail-${label}-${Math.random().toString(36).slice(2)}`;
+        const hasDetail = (data.ingredients && data.ingredients.length) || data.how_to;
+        if (!hasDetail) return `<div>${icon} ${label}: ${name}</div>`;
+        const ings = (data.ingredients || []).map(escapeHtml).join(', ');
+        const howto = escapeHtml(data.how_to || '');
+        const nut = data.nutrition || {};
+        const nutLine = (nut.calories||nut.protein_g||nut.carbs_g) ? `<div class="flex flex-wrap gap-1 mt-1"><span class="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">🔥 ${nut.calories||0}kcal</span><span class="bg-red-50 text-red-600 px-1.5 py-0.5 rounded">단 ${nut.protein_g||0}g</span><span class="bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded">탄 ${nut.carbs_g||0}g</span><span class="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">지 ${nut.fat_g||0}g</span></div>` : '';
+        return `<div>${icon} ${label}: ${name} <button onclick="document.getElementById('${id}').classList.toggle('hidden')" class="text-emerald-600 hover:text-emerald-800 text-xs underline ml-1">레시피</button><div id="${id}" class="hidden mt-1 pl-2 border-l-2 border-emerald-200 space-y-0.5"><div class="text-gray-500">재료: ${ings}</div>${howto?`<div class="text-gray-500">조리법: ${howto}</div>`:''} ${nutLine}</div></div>`;
+    }
+    function renderHistory(h){ const el=document.getElementById('history-list'); if(!h.length){ el.innerHTML='<p class="text-gray-400 text-center py-4 text-sm">기록된 식단이 없습니다</p>'; return; } el.innerHTML=h.map(r=>`<div class="bg-gray-50 rounded-lg p-3"><div class="font-medium text-gray-800 text-sm mb-1">${escapeHtml(r.date)}</div><div class="text-xs text-gray-600 space-y-0.5">${renderHistoryMealDetail(r.breakfast_data,r.breakfast,'아침','🌅')}${renderHistoryMealDetail(r.lunch_data,r.lunch,'점심','☀️')}${renderHistoryMealDetail(r.dinner_data,r.dinner,'저녁','🌙')}${r.note?`<div class="text-emerald-600 mt-1">💡 ${escapeHtml(r.note)}</div>`:''}</div></div>`).join(''); }
 
     async function loadBloodSugar(){ try{ const res=await fetch(`${API_BASE}/api/blood-sugar`); const list=await res.json(); const el=document.getElementById('blood-list'); if(!list.length){ el.innerHTML='<p class="text-gray-400 text-center py-4 text-sm">혈당 기록이 없습니다</p>'; return; } el.innerHTML=list.slice(0,20).map(r=>`<div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg"><div><span class="text-sm text-gray-700">${escapeHtml(r.date)} ${escapeHtml(r.time)}</span>${r.note?`<span class="text-xs text-gray-400 ml-1">${escapeHtml(r.note)}</span>`:''}</div><div class="flex items-center gap-2"><span class="font-bold text-sm ${r.level>180?'text-red-600':r.level<70?'text-blue-600':'text-emerald-600'}">${r.level} mg/dL</span><button onclick="deleteBloodSugar(${r.id})" class="text-red-400 hover:text-red-600 text-xs">✕</button></div></div>`).join(''); }catch{} }
     async function addBloodSugar(){ const date=document.getElementById('bs-date').value,time=document.getElementById('bs-time').value,level=parseInt(document.getElementById('bs-level').value),note=document.getElementById('bs-note').value.trim(); if(!date||isNaN(level)){ showToast('날짜와 혈당을 입력하세요',true); return; } try{ const res=await fetch(`${API_BASE}/api/blood-sugar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,level,note:note||null})}); if(res.ok){ showToast('혈당 기록됨'); document.getElementById('bs-level').value='';document.getElementById('bs-note').value=''; loadBloodSugar();renderBloodChart(); } else showToast('기록 실패',true); }catch{ showToast('기록 중 오류',true); } }
@@ -550,7 +594,8 @@
     let _selectedProvider='ollama',_streaming=false,_thinking='none',_effort='none';
 
     async function loadSettings(){ try{ const res=await fetch('/api/settings'); if(!res.ok) return; applyToUI(await res.json()); }catch{} }
-    function applyToUI(s){ _selectedProvider=s.provider;_streaming=s.streaming;_thinking=s.thinking_mode;_effort=s.reasoning_effort; document.getElementById('setting-base-url').value=s.base_url;document.getElementById('setting-api-key').value=s.api_key;document.getElementById('setting-model').value=s.model_name; const cf=(s.provider!=='custom'&&PROVIDERS[s.provider])?PROVIDERS[s.provider].format:s.api_format; document.getElementById('setting-format').value=cf;document.getElementById('setting-thinking-budget').value=s.thinking_budget; _refreshProviderBtns(s.provider);_refreshStreaming();_refreshThinking(s.thinking_mode);_refreshEffort(s.reasoning_effort);_refreshModelList(s.provider);_refreshApiKeySection(s.provider);_setProviderHint(s.provider); }
+    function applyToUI(s){ _selectedProvider=s.provider;_streaming=s.streaming;_thinking=s.thinking_mode;_effort=s.reasoning_effort; document.getElementById('setting-base-url').value=s.base_url;document.getElementById('setting-api-key').value=s.api_key;document.getElementById('setting-model').value=s.model_name; const cf=(s.provider!=='custom'&&PROVIDERS[s.provider])?PROVIDERS[s.provider].format:s.api_format; document.getElementById('setting-format').value=cf;document.getElementById('setting-thinking-budget').value=s.thinking_budget; document.getElementById('setting-food-api-key').value=s.food_api_key||''; _refreshProviderBtns(s.provider);_refreshStreaming();_refreshThinking(s.thinking_mode);_refreshEffort(s.reasoning_effort);_refreshModelList(s.provider);_refreshApiKeySection(s.provider);_setProviderHint(s.provider); }
+    function toggleFoodApiKeyVisibility(){ const el=document.getElementById('setting-food-api-key'); el.type=el.type==='password'?'text':'password'; }
     function selectProvider(p){ _selectedProvider=p;const pr=PROVIDERS[p]; document.getElementById('setting-base-url').value=pr.base_url;document.getElementById('setting-format').value=pr.format; _refreshProviderBtns(p);_refreshModelList(p);_refreshApiKeySection(p);_setProviderHint(p); }
     function _refreshProviderBtns(p){ document.querySelectorAll('.provider-btn').forEach(b=>b.classList.remove('selected'));document.getElementById(`provider-${p}`)?.classList.add('selected'); }
     function _refreshModelList(p){ document.getElementById('model-suggestions').innerHTML=(PROVIDERS[p]?.models||[]).map(m=>`<option value="${m}">`).join(''); }
@@ -563,7 +608,7 @@
     function _refreshThinking(m){ document.querySelectorAll('.thinking-btn').forEach(b=>b.classList.remove('selected'));document.getElementById(`thinking-${m}`)?.classList.add('selected');document.getElementById('thinking-hint-cot').classList.toggle('hidden',m!=='cot');document.getElementById('thinking-hint-think').classList.toggle('hidden',m!=='think');document.getElementById('thinking-budget-section').classList.toggle('hidden',m!=='think'); }
     function selectEffort(e){ _effort=e;_refreshEffort(e); }
     function _refreshEffort(e){ document.querySelectorAll('.effort-btn').forEach(b=>b.classList.remove('selected'));document.getElementById(`effort-${e}`)?.classList.add('selected'); }
-    async function saveSettings(silent=false){ const payload={provider:_selectedProvider,base_url:document.getElementById('setting-base-url').value.trim(),api_key:document.getElementById('setting-api-key').value.trim(),model_name:document.getElementById('setting-model').value.trim(),api_format:document.getElementById('setting-format').value,streaming:_streaming,thinking_mode:_thinking,thinking_budget:parseInt(document.getElementById('setting-thinking-budget').value)||8000,reasoning_effort:_effort}; try{ const res=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(res.ok){ if(!silent) showToast('설정이 저장되었습니다');return true; } showToast('저장 실패',true);return false; }catch{ showToast('저장 중 오류',true);return false; } }
+    async function saveSettings(silent=false){ const payload={provider:_selectedProvider,base_url:document.getElementById('setting-base-url').value.trim(),api_key:document.getElementById('setting-api-key').value.trim(),model_name:document.getElementById('setting-model').value.trim(),api_format:document.getElementById('setting-format').value,streaming:_streaming,thinking_mode:_thinking,thinking_budget:parseInt(document.getElementById('setting-thinking-budget').value)||8000,reasoning_effort:_effort,food_api_key:document.getElementById('setting-food-api-key').value.trim()}; try{ const res=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(res.ok){ if(!silent) showToast('설정이 저장되었습니다');return true; } showToast('저장 실패',true);return false; }catch{ showToast('저장 중 오류',true);return false; } }
     async function testConnection(){ const btn=document.getElementById('test-btn');btn.disabled=true;btn.textContent='저장 중...'; const saved=await saveSettings(true); if(!saved){ btn.disabled=false;btn.textContent='🔌 연결 테스트';return; } btn.textContent='테스트 중...'; try{ const res=await fetch('/api/settings/test',{method:'POST'});const data=await res.json();showToast(res.ok?`✓ ${data.message}`:`✗ ${data.detail}`,!res.ok); }catch{ showToast('연결 테스트 실패',true); } finally{ btn.disabled=false;btn.textContent='🔌 연결 테스트'; } }
 
     async function exportBackup(){ try{ const res=await fetch(`${API_BASE}/api/backup/export`);const data=await res.json();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`diet-backup-${new Date().toISOString().split('T')[0]}.json`;a.click();URL.revokeObjectURL(url);showToast('백업 파일이 다운로드되었습니다'); }catch{ showToast('백업 내보내기 실패',true); } }

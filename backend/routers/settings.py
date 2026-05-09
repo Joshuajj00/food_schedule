@@ -21,6 +21,7 @@ DEFAULT_SETTINGS = {
     "thinking_mode": "none",
     "thinking_budget": 8000,
     "reasoning_effort": "none",
+    "food_api_key": "",
 }
 
 
@@ -48,6 +49,7 @@ def _to_response_dict(row: LLMSettingsDB) -> dict:
         'thinking_mode': row.thinking_mode,
         'thinking_budget': row.thinking_budget,
         'reasoning_effort': row.reasoning_effort,
+        'food_api_key': decrypt(row.food_api_key or ''),
         'updated_at': row.updated_at,
     }
 
@@ -63,7 +65,7 @@ async def get_settings(db: Session = Depends(get_db)):
 async def update_settings(body: LLMSettingsUpdate, db: Session = Depends(get_db)):
     row = _get_or_create(db)
     for field, value in body.model_dump().items():
-        if field == 'api_key':
+        if field in ('api_key', 'food_api_key'):
             value = encrypt(value)
         setattr(row, field, value)
     row.updated_at = datetime.now(timezone.utc)

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
+import json
 
 from backend.database import get_db, Ingredient, MealHistory, LLMSettings
 from backend.models import MealPlanListResponse, MealPlanOption, MealHistoryCreate, MealHistoryResponse, IngredientResponse, DecryptedLLMSettings
@@ -36,7 +37,30 @@ def _get_settings(db: Session) -> DecryptedLLMSettings:
         thinking_mode=row.thinking_mode,
         thinking_budget=row.thinking_budget,
         reasoning_effort=row.reasoning_effort,
+        food_api_key=decrypt(row.food_api_key or ''),
     )
+
+
+def _history_to_dict(record: MealHistory) -> dict:
+    def parse_meal(s):
+        if not s:
+            return None
+        try:
+            return json.loads(s)
+        except Exception:
+            return None
+    return {
+        'id': record.id,
+        'date': record.date,
+        'breakfast': record.breakfast,
+        'lunch': record.lunch,
+        'dinner': record.dinner,
+        'note': record.note,
+        'created_at': record.created_at,
+        'breakfast_data': parse_meal(record.breakfast_data),
+        'lunch_data': parse_meal(record.lunch_data),
+        'dinner_data': parse_meal(record.dinner_data),
+    }
 
 
 @router.post('/generate', response_model=MealPlanListResponse)
@@ -122,7 +146,7 @@ async def generate_meal(db: Session = Depends(get_db)):
             try:
                 for meal in [option.breakfast, option.lunch, option.dinner]:
                     ing_list = [(ing, 50.0) for ing in meal.ingredients if ing]
-                    verified = await calculate_meal_nutrition(ing_list)
+                    verified = await calculate_meal_nutrition(ing_list, api_key=settings.food_api_key)
                     if verified['matched']:
                         t = verified['total']
                         meal.note = (
@@ -161,21 +185,34 @@ async def get_meal_history(
         query = query.filter(MealHistory.date <= end_date)
     records = query.order_by(MealHistory.date.desc()).all()
     logger.debug(f"식단 기록 조회: {len(records)}건")
-    return records
+    return [_history_to_dict(r) for r in records]
+
+
+def _meal_to_json(meal_item) -> str | None:
+    if not meal_item:
+        return None
+    return json.dumps(meal_item.model_dump(), ensure_ascii=False)
 
 
 @router.post('/history', response_model=MealHistoryResponse)
 async def save_meal_history(meal_data: MealHistoryCreate, db: Session = Depends(get_db)):
+    bdata = _meal_to_json(meal_data.breakfast_data)
+    ldata = _meal_to_json(meal_data.lunch_data)
+    ddata = _meal_to_json(meal_data.dinner_data)
+
     existing = db.query(MealHistory).filter(MealHistory.date == meal_data.date).first()
     if existing:
         existing.breakfast = meal_data.breakfast
         existing.lunch = meal_data.lunch
         existing.dinner = meal_data.dinner
         existing.note = meal_data.note
+        existing.breakfast_data = bdata
+        existing.lunch_data = ldata
+        existing.dinner_data = ddata
         db.commit()
         db.refresh(existing)
         logger.info(f"식단 기록 업데이트: {meal_data.date}")
-        return existing
+        return _history_to_dict(existing)
 
     new_history = MealHistory(
         date=meal_data.date,
@@ -183,9 +220,12 @@ async def save_meal_history(meal_data: MealHistoryCreate, db: Session = Depends(
         lunch=meal_data.lunch,
         dinner=meal_data.dinner,
         note=meal_data.note,
+        breakfast_data=bdata,
+        lunch_data=ldata,
+        dinner_data=ddata,
     )
     db.add(new_history)
     db.commit()
     db.refresh(new_history)
     logger.info(f"식단 기록 저장: {meal_data.date}")
-    return new_history
+    return _history_to_dict(new_history)

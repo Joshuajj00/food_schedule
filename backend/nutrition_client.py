@@ -42,10 +42,10 @@ _cache: dict[str, tuple[float, Optional[NutritionInfo]]] = {}
 _CACHE_TTL = 86400
 
 
-async def fetch_nutrition(query: str, top_k: int = 5) -> Optional[NutritionInfo]:
+async def fetch_nutrition(query: str, api_key: str = '', top_k: int = 5) -> Optional[NutritionInfo]:
     """식품명으로 검색 → 100g 기준 정규화된 결과 1개 반환. 실패 시 None."""
-    if not API_KEY:
-        logger.warning("FOOD_API_KEY 환경변수 미설정. 영양 조회 건너뜀.")
+    key = api_key or API_KEY
+    if not key:
         return None
 
     query = query.strip()
@@ -53,14 +53,15 @@ async def fetch_nutrition(query: str, top_k: int = 5) -> Optional[NutritionInfo]
         return None
 
     now = time.time()
-    if query in _cache:
-        ts, val = _cache[query]
+    cache_key = f"{key[:8]}:{query}"
+    if cache_key in _cache:
+        ts, val = _cache[cache_key]
         if now - ts < _CACHE_TTL:
             logger.debug(f"영양 캐시 히트: {query}")
             return val
 
     encoded = quote(query)
-    url = f"{BASE_URL}/{API_KEY}/{SERVICE_ID}/json/1/{top_k}/DESC_KOR={encoded}"
+    url = f"{BASE_URL}/{key}/{SERVICE_ID}/json/1/{top_k}/DESC_KOR={encoded}"
     logger.debug(f"영양 API 호출: {query}")
 
     try:
@@ -70,7 +71,7 @@ async def fetch_nutrition(query: str, top_k: int = 5) -> Optional[NutritionInfo]
             data = resp.json()
     except httpx.HTTPError as e:
         logger.warning(f"영양 API 요청 실패 [{query}]: {e}")
-        _cache[query] = (now, None)
+        _cache[cache_key] = (now, None)
         return None
     except ValueError as e:
         logger.warning(f"영양 API 응답 파싱 실패 [{query}]: {e}")
@@ -81,21 +82,21 @@ async def fetch_nutrition(query: str, top_k: int = 5) -> Optional[NutritionInfo]
     code = result_meta.get('CODE', '')
     if code and code != 'INFO-000':
         logger.debug(f"영양 검색 결과 없음: {query} (code={code})")
-        _cache[query] = (now, None)
+        _cache[cache_key] = (now, None)
         return None
 
     rows = body.get('row', [])
     if not rows:
-        _cache[query] = (now, None)
+        _cache[cache_key] = (now, None)
         return None
 
     best = _pick_best_match(query, rows)
     if not best:
-        _cache[query] = (now, None)
+        _cache[cache_key] = (now, None)
         return None
 
     info = _row_to_nutrition(best, query)
-    _cache[query] = (now, info)
+    _cache[cache_key] = (now, info)
     return info
 
 
@@ -145,14 +146,18 @@ def _row_to_nutrition(row: dict, query: str) -> NutritionInfo:
 
 async def calculate_meal_nutrition(
     ingredients_with_grams: list[tuple[str, float]],
+    api_key: str = '',
 ) -> dict:
     """(재료명, 사용량g) 리스트 → 합산 영양 정보. 100g 기준으로 조회 후 비례 계산."""
+    key = api_key or API_KEY
+    if not key:
+        return {'total': {'calories': 0.0, 'carbs_g': 0.0, 'protein_g': 0.0, 'fat_g': 0.0, 'sugar_g': 0.0}, 'matched': [], 'unmatched': []}
     total = {'calories': 0.0, 'carbs_g': 0.0, 'protein_g': 0.0, 'fat_g': 0.0, 'sugar_g': 0.0}
     matched_items = []
     unmatched = []
 
     for name, grams in ingredients_with_grams:
-        info = await fetch_nutrition(name)
+        info = await fetch_nutrition(name, api_key=key)
         if info is None:
             unmatched.append(name)
             continue

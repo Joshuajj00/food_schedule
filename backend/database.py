@@ -57,6 +57,9 @@ class MealHistory(Base):
     lunch = Column(String, nullable=True)
     dinner = Column(String, nullable=True)
     note = Column(String, nullable=True)
+    breakfast_data = Column(String, nullable=True)  # JSON: 재료·조리법 포함 MealItem
+    lunch_data = Column(String, nullable=True)
+    dinner_data = Column(String, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
 # 예산 기록 테이블
@@ -83,6 +86,7 @@ class LLMSettings(Base):
     thinking_mode    = Column(String, default='none')     # none | cot | think
     thinking_budget  = Column(Integer, default=8000)
     reasoning_effort = Column(String, default='none')     # none | low | medium | high
+    food_api_key     = Column(String, default='')         # 식약처 식품영양성분DB API 키 (암호화)
     updated_at       = Column(DateTime, default=func.now())
 
 # 혈당 기록 테이블
@@ -126,6 +130,10 @@ def _migrate(engine):
         ('meal_favorite', 'breakfast_data', 'TEXT'),
         ('meal_favorite', 'lunch_data', 'TEXT'),
         ('meal_favorite', 'dinner_data', 'TEXT'),
+        ('meal_history', 'breakfast_data', 'TEXT'),
+        ('meal_history', 'lunch_data', 'TEXT'),
+        ('meal_history', 'dinner_data', 'TEXT'),
+        ('llm_settings', 'food_api_key', "TEXT DEFAULT ''"),
     ]
     with engine.connect() as conn:
         for table, column, col_def in migrations:

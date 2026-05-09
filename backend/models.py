@@ -68,6 +68,9 @@ class MealHistoryCreate(BaseModel):
     lunch: Optional[str] = None
     dinner: Optional[str] = None
     note: Optional[str] = None
+    breakfast_data: Optional[MealItem] = None
+    lunch_data: Optional[MealItem] = None
+    dinner_data: Optional[MealItem] = None
 
 class MealHistoryResponse(BaseModel):
     """식단 기록 응답"""
@@ -80,6 +83,9 @@ class MealHistoryResponse(BaseModel):
     dinner: Optional[str] = None
     note: Optional[str] = None
     created_at: Optional[datetime] = None
+    breakfast_data: Optional[MealItem] = None
+    lunch_data: Optional[MealItem] = None
+    dinner_data: Optional[MealItem] = None
 
 # ========== 예산 관련 모델 ==========
 
@@ -119,6 +125,7 @@ class LLMSettingsUpdate(BaseModel):
     thinking_mode: str = 'none'
     thinking_budget: int = 8000
     reasoning_effort: str = 'none'
+    food_api_key: str = ''
 
 class LLMSettingsResponse(LLMSettingsUpdate):
     """LLM 설정 응답"""
@@ -237,3 +244,4 @@ class DecryptedLLMSettings:
     thinking_mode: str
     thinking_budget: int
     reasoning_effort: str
+    food_api_key: str = ''
